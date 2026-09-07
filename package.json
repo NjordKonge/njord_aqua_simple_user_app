@@ -1,0 +1,40 @@
+{
+  "name": "njord-aqua-simple",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "build:mobile": "vite build --config vite.config.mobile.ts",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "android:sync": "npm run build:mobile && npx cap sync android",
+    "android:open": "npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor-community/bluetooth-le": "^8.2.0",
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
+    "@tailwindcss/vite": "^4.2.1",
+    "@tanstack/react-router": "^1.168.25",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.575.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tailwind-merge": "^3.5.0",
+    "tailwindcss": "^4.2.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.3.4",
+    "@tanstack/router-plugin": "^1.167.28",
+    "@types/node": "^22.16.5",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@types/web-bluetooth": "^0.0.21",
+    "@vitejs/plugin-react": "^5.0.4",
+    "typescript": "^5.8.3",
+    "vite": "^7.3.1",
+    "vite-tsconfig-paths": "^6.0.2"
+  }
+}
