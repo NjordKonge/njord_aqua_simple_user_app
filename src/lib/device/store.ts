@@ -1211,8 +1211,22 @@ class Store {
       rt.log = undefined;
       rt.sonarArmed = false;  // CCCD is gone with the link; re-arm on reconnect
     }
+    this.abortInFlightLogProgress(id);
     this.notify();
     if (rt?.autoReconnect) this.scheduleReconnect(id);
+  }
+
+  /** Mark an in-flight log download as cancelled when the link drops out from
+   *  under it (real disconnect, or a watchdog-forced reconnect for an
+   *  unrelated reason) so it can't sit at "in progress" forever — that state
+   *  is also what the watchdog checks (alongside rt.log) to decide whether
+   *  LiveStatus silence is expected, so leaving a dead transfer marked
+   *  in-flight would wrongly suppress zombie-link detection indefinitely. */
+  private abortInFlightLogProgress(id: string) {
+    const prev = this.logProgress[id];
+    if (prev && prev.completedAt == null) {
+      this.logProgress[id] = { ...prev, cancelled: true, completedAt: Date.now() };
+    }
   }
 
   async reconnect(id: string) {
@@ -1290,6 +1304,17 @@ class Store {
       const rt = this.rt.get(dev.id);
       if (!rt || !rt.autoReconnect || rt.reconnecting || rt.reconnectTimer) continue;
       if (rt.log) continue; // log download legitimately silences LiveStatus
+      // rt.log is only populated once the *first* LogData chunk actually
+      // arrives (handleLogData). Firmware suppresses LiveStatus the instant
+      // it ACKs STARTLOGDL — before that first chunk shows up — so there was
+      // a window right after starting a download where LiveStatus was
+      // already silent but rt.log was still unset, and the watchdog would
+      // force-reconnect and abort the transfer it should have been ignoring.
+      // logProgress is set synchronously from the STARTLOGDL ack (see
+      // handleResponse's "start_log_download" case), so checking it too
+      // closes that gap for the whole download, not just after the first chunk.
+      const progress = this.logProgress[dev.id];
+      if (progress && progress.completedAt == null) continue;
       if (now - dev.lastUpdate < Store.WATCHDOG_STALE_MS) continue;
       if (rt.staleReconnects >= Store.WATCHDOG_MAX_ATTEMPTS) continue; // gave up
       void this.forceReconnect(
@@ -1315,6 +1340,7 @@ class Store {
     rt.pending.forEach((cb) => cb({ ok: false, error: "link reset" }));
     rt.pending.clear();
     rt.log = undefined;
+    this.abortInFlightLogProgress(id);
     this.notify();
     console.warn(`[njord] watchdog: ${reason} on ${id} — forcing reconnect (attempt ${rt.staleReconnects})`);
     try {

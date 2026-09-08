@@ -43,12 +43,20 @@ export interface DeviceSummary {
    *  duty toward, not an assumed constant — used for the Normal/High charge
    *  percentage math and the adjustable current field in Settings. */
   targetMa: number;
-  /** Real-time "is the electrode actively driven right now" flag, straight
-   *  from LiveStatus.elec_on (`eon`) — NOT derived from dosingMode/config.
-   *  elec_on can be false even while chlorination is enabled (elec_en=1)
-   *  during a cycle's REST phase, so this is the correct source for a
-   *  physical-LED-style live indicator. False while offline. */
+  /** Real-time "is the electrode actively driven right now" flag, from
+   *  LiveStatus.phase (`ph`) === "ON". NOT derived from LiveStatus.elec_on:
+   *  elec_on (AppStateMachine.cpp `eon`) is only `state == ELECTROLYSIS_ACTIVE`,
+   *  which stays true for the *entire* cycle including the "WAIT" sub-phase
+   *  (this cycle's charge target already reached, holding until the next
+   *  cycle starts) — it never goes false until a full Stop. `phase` is the
+   *  field that actually distinguishes driving from waiting. False while
+   *  offline. */
   electrolysisOn: boolean;
+  /** Three-state live status for the single "Live electrolysis status" LED:
+   *  "on" = actively driving current, "waiting" = this cycle's charge target
+   *  already reached (holding until the next cycle), "off" = not running an
+   *  electrolysis cycle at all (or offline). */
+  electrolysisState: "on" | "waiting" | "off";
   /** What the user is allowed to do right now. */
   actions: {
     canStart: boolean;
@@ -70,14 +78,27 @@ export function useDeviceSummary(deviceId: string | undefined): DeviceSummary {
   const health = device && online ? summarizeHealth(device.status) : null;
   const progress = device && online ? summarizeProgress(device.status) : null;
   const tank = summarizeTank(config, sonar?.dist_mm);
-  const watts = device && online ? wattsFromStatus(device.status) : null;
   const dosingMode = dosingModeFromConfig(config);
 
   const hasFault = Boolean(device && device.status.fault !== "NONE");
-  // The technical app toggles start/stop on `elec_on` rather than `state`,
-  // because the electrode can be off during a REST phase while the device is
-  // still nominally "active". Match that behaviour exactly.
+  // Start/Stop gate on `elec_on` (state == ELECTROLYSIS_ACTIVE), not `phase`:
+  // Stop must be offered throughout the whole cycle, including its "WAIT"
+  // sub-phase, not just while the electrode is instantaneously driving.
   const elecOn = Boolean(device?.status.elec_on);
+  // `phase` (LiveStatus `ph`, AppSM_GetCyclePhaseStr()) is "ON" while the
+  // electrode is actually driving current, "WAIT" once this cycle's charge
+  // target is reached and it's holding for the next cycle, or "" whenever
+  // the state machine isn't in ELECTROLYSIS_ACTIVE at all (fully stopped).
+  const phase = device?.status.phase ?? "";
+  const driving = online && phase === "ON";
+  const cycleWaiting = online && phase === "WAIT";
+  // No current flows during WAIT or when fully stopped, so read straight to
+  // 0 instead of deriving from cruise_duty_pm/elec_ma — those two only ever
+  // get refreshed while the electrode is actually driving (idle-state
+  // current sampling on the device is a 10 s poll, and cruise_duty_pm is
+  // never reset at all on Stop), so trusting them here is what made Watts
+  // look frozen at its last non-zero reading after a Stop.
+  const watts = device && online ? (driving ? wattsFromStatus(device.status) : 0) : null;
 
   const attention = (device?.alarms ?? [])
     .slice()
@@ -101,7 +122,8 @@ export function useDeviceSummary(deviceId: string | undefined): DeviceSummary {
       config?.cycle_c ?? DEFAULT_CONFIG.cycle_c,
     ),
     targetMa: config?.target_ma ?? DEFAULT_CONFIG.target_ma,
-    electrolysisOn: online && elecOn,
+    electrolysisOn: driving,
+    electrolysisState: driving ? "on" : cycleWaiting ? "waiting" : "off",
     actions: {
       canStart: online && !elecOn && !hasFault,
       canStop: online && elecOn,

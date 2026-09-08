@@ -44,7 +44,7 @@ function HomeScreen() {
   const summary = useDeviceSummary(deviceId);
   const {
     device, name, status, waterStatus, health, watts, tank, dosingMode, cycleSeconds, targetMa,
-    electrolysisOn, actions, attention,
+    electrolysisOn, electrolysisState, actions, attention,
   } = summary;
   const [infoOpen, setInfoOpen] = useState(false);
   const [modeInfoOpen, setModeInfoOpen] = useState(false);
@@ -187,15 +187,16 @@ function HomeScreen() {
           value={
             watts === null
               ? "—"
-              // Chlorination can be enabled while the electrode itself is
-              // idling through a cycle's REST phase (elec_on false) — that's
-              // a normal part of the dosing workflow, not a fault, but a
-              // flat "0 W" reads as broken/stuck. Say so explicitly instead.
-              : dosingMode !== "off" && !electrolysisOn
+              // "waiting" = this cycle's charge target is already reached and
+              // the electrode is holding for the next cycle — a normal part
+              // of the dosing workflow, not a fault, but a flat "0 W" reads
+              // as broken/stuck. Say so explicitly instead. (watts is 0 for
+              // every other non-"on" state, so this is purely a label choice.)
+              : electrolysisState === "waiting"
                 ? "Waiting\u2026"
                 : `${watts.toFixed(0)} W`
           }
-          muted={watts !== null && dosingMode !== "off" && !electrolysisOn}
+          muted={electrolysisState === "waiting"}
         />
         <Metric icon={Droplets} label="Water used" value="N/A" muted />
       </div>
@@ -211,7 +212,7 @@ function HomeScreen() {
         </button>
       </div>
 
-      <StatusLeds online={device.online} chlorinationOn={dosingMode !== "off"} electrolysisOn={electrolysisOn} />
+      <LiveElectrolysisStatus online={device.online} state={electrolysisState} />
       <DosingModeToggle
         mode={displayedMode}
         onChange={(mode) => {
@@ -340,81 +341,56 @@ function Metric({
 }
 
 /**
- * Two physical-LED-style rows in one bar:
- *  - Chlorination: whether the device is CONFIGURED to run (dosingMode !==
- *    "off"), independent of the electrode's instant-to-instant state.
- *  - Electrolysis: the electrode's live `elec_on` state, sourced straight
- *    from the device's status (not derived from dosingMode/config), so it
- *    reflects reality even during a cycle's REST phase, faults, or offline.
- *    This can be OFF while Chlorination is ON — a normal REST phase, not a
- *    fault — shown as a steady blue "Waiting" rather than reusing the same
- *    dead "Off" look, so a resting cycle never reads as something's wrong.
+ * Single physical-LED-style row: a traffic-light readout of the electrode's
+ * real-time drive state (LiveStatus.phase / `ph`), replacing the previous
+ * two-LED "Chlorination" + "Electrolysis" bar.
+ *  - Green (on):      actively driving current right now.
+ *  - Yellow (waiting): this cycle's charge target is already reached; the
+ *    electrode is holding until the next cycle starts (or, while offline
+ *    momentarily reconnecting mid-cycle, the last known driving state).
+ *  - Red (off):        not running an electrolysis cycle at all — Chlorination
+ *    is Off, the device is offline, or a fault stopped it.
  *
- * Only the "on" (green) state pulses — "Waiting" (blue) stays steady so the
- * two remain visually distinct from across the room, not just by color.
+ * Only the "on" (green) state pulses — the others stay steady.
  */
-function StatusLeds({
+function LiveElectrolysisStatus({
   online,
-  chlorinationOn,
-  electrolysisOn,
+  state,
 }: {
   online: boolean;
-  chlorinationOn: boolean;
-  electrolysisOn: boolean;
+  state: "on" | "waiting" | "off";
 }) {
-  const chlorinationLit = online && chlorinationOn;
-  const electrolysisLit = online && electrolysisOn;
-  const waiting = online && chlorinationOn && !electrolysisOn;
+  const effective = online ? state : "off";
+  const color = effective === "on" ? "good" : effective === "waiting" ? "warn" : "bad";
+  const text = !online ? "—" : effective === "on" ? "On" : effective === "waiting" ? "Done for cycle" : "Off";
 
   return (
-    <div className="surface-lift grid grid-cols-2 divide-x divide-border-soft rounded-card border border-border-soft bg-surface transition-all duration-500">
-      <div
-        className="flex items-center gap-2 px-3.5 py-3"
-        style={
-          chlorinationLit
-            ? { backgroundImage: "linear-gradient(100deg, color-mix(in srgb, var(--color-good) 12%, transparent), transparent 50%)" }
-            : undefined
-        }
+    <div
+      className="surface-lift flex items-center gap-2.5 rounded-card border border-border-soft bg-surface px-3.5 py-3 transition-all duration-500"
+      style={{
+        backgroundImage: `linear-gradient(100deg, color-mix(in srgb, var(--color-${color}) 12%, transparent), transparent 50%)`,
+      }}
+    >
+      <Led state={effective} />
+      <span className="text-[0.6875rem] font-medium uppercase tracking-wider text-muted">
+        Live electrolysis status
+      </span>
+      <span
+        className={cn(
+          "ml-auto text-[0.6875rem] font-semibold uppercase tracking-wider transition-colors duration-500",
+          effective === "on" && "text-good",
+          effective === "waiting" && "text-warn",
+          effective === "off" && "text-bad",
+        )}
       >
-        <Led state={chlorinationLit ? "on" : "off"} />
-        <span className="text-[0.6875rem] font-medium uppercase tracking-wider text-muted">Chlorination</span>
-        <span
-          className={cn(
-            "ml-auto text-[0.6875rem] font-semibold uppercase tracking-wider transition-colors duration-500",
-            chlorinationLit ? "text-good" : "text-faint",
-          )}
-        >
-          {online ? (chlorinationOn ? "On" : "Off") : "—"}
-        </span>
-      </div>
-
-      <div
-        className="flex items-center gap-2 px-3.5 py-3"
-        style={
-          electrolysisLit
-            ? { backgroundImage: "linear-gradient(100deg, color-mix(in srgb, var(--color-good) 12%, transparent), transparent 50%)" }
-            : waiting
-              ? { backgroundImage: "linear-gradient(100deg, color-mix(in srgb, var(--color-brand) 12%, transparent), transparent 50%)" }
-              : undefined
-        }
-      >
-        <Led state={electrolysisLit ? "on" : waiting ? "waiting" : "off"} />
-        <span className="text-[0.6875rem] font-medium uppercase tracking-wider text-muted">Electrolysis</span>
-        <span
-          className={cn(
-            "ml-auto text-[0.6875rem] font-semibold uppercase tracking-wider transition-colors duration-500",
-            electrolysisLit ? "text-good" : waiting ? "text-brand" : "text-faint",
-          )}
-        >
-          {!online ? "—" : electrolysisLit ? "On" : waiting ? "Waiting" : "Off"}
-        </span>
-      </div>
+        {text}
+      </span>
     </div>
   );
 }
 
-/** Single dot used by both StatusLeds rows — "on" breathes green, "waiting"
- *  is a steady blue, "off" is a dead surface-colored dot. */
+/** Single dot for LiveElectrolysisStatus — "on" breathes green, "waiting" is
+ *  a steady yellow, "off" is a steady red. */
 function Led({ state }: { state: "on" | "waiting" | "off" }) {
   return (
     <span className="relative flex h-2.5 w-2.5 shrink-0 items-center justify-center">
@@ -422,15 +398,15 @@ function Led({ state }: { state: "on" | "waiting" | "off" }) {
         className={cn(
           "h-2.5 w-2.5 rounded-full transition-colors duration-500",
           state === "on" && "animate-breathe bg-good",
-          state === "waiting" && "bg-brand",
-          state === "off" && "bg-surface-raised",
+          state === "waiting" && "bg-warn",
+          state === "off" && "bg-bad",
         )}
         style={
           state === "on"
             ? { boxShadow: "0 0 0 3px color-mix(in srgb, var(--color-good) 18%, transparent), 0 0 14px var(--color-good)" }
             : state === "waiting"
-              ? { boxShadow: "0 0 0 3px color-mix(in srgb, var(--color-brand) 18%, transparent), 0 0 10px var(--color-brand)" }
-              : undefined
+              ? { boxShadow: "0 0 0 3px color-mix(in srgb, var(--color-warn) 18%, transparent), 0 0 10px var(--color-warn)" }
+              : { boxShadow: "0 0 0 3px color-mix(in srgb, var(--color-bad) 18%, transparent), 0 0 10px var(--color-bad)" }
         }
       />
     </span>
