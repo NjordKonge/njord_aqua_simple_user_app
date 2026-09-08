@@ -54,10 +54,14 @@ function OverviewScreen() {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <button aria-label="Back" onClick={() => navigate({ to: "/" })} className="text-muted">
-          <ChevronLeft size={24} />
+    <div className="stagger space-y-6">
+      <div className="flex items-center gap-1">
+        <button
+          aria-label="Back"
+          onClick={() => navigate({ to: "/" })}
+          className="press -ml-2 rounded-full p-1.5 text-muted"
+        >
+          <ChevronLeft size={23} />
         </button>
         <h1 className="text-2xl font-semibold">Overview</h1>
       </div>
@@ -73,7 +77,7 @@ function OverviewScreen() {
       />
 
       <section>
-        <p className="mb-2 text-sm text-muted">Operation cycle</p>
+        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Operation cycle</p>
         <CycleRing summary={cycleRing} />
       </section>
 
@@ -82,13 +86,13 @@ function OverviewScreen() {
           explicit empty state rather than fabricated numbers; flag for
           PM/firmware-owner whether a flow meter is planned. */}
       <section>
-        <p className="mb-1 text-sm text-muted">Water consumption</p>
-        <p className="mb-3 text-3xl font-semibold text-muted">Not available</p>
+        <p className="mb-1 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Water consumption</p>
+        <p className="mb-3 text-3xl font-semibold text-faint">Not available</p>
         <MiniBarChart data={[]} unit="L" />
       </section>
 
       <section>
-        <p className="mb-2 text-sm text-muted">Water temperature — last 48h</p>
+        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Water temperature — last 48h</p>
         <MiniLineChart
           data={tempSeries}
           unit="°C"
@@ -98,7 +102,7 @@ function OverviewScreen() {
       </section>
 
       <section>
-        <p className="mb-2 text-sm text-muted">Tank level — last 48h</p>
+        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Tank level — last 48h</p>
         <MiniLineChart
           data={recentSonar}
           unit="mm"
@@ -109,25 +113,25 @@ function OverviewScreen() {
       </section>
 
       <section>
-        <p className="mb-2 text-sm text-muted">Electrode voltage — last 48h</p>
+        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Electrode voltage — last 48h</p>
         <MiniLineChart data={voltSeries} unit="V" xStartLabel="48h ago" xEndLabel="now" />
       </section>
 
       <section>
-        <p className="mb-2 text-sm text-muted">Electrode current — last 48h</p>
+        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Electrode current — last 48h</p>
         <MiniLineChart data={ampSeries} unit="mA" xStartLabel="48h ago" xEndLabel="now" />
       </section>
 
       <section>
-        <p className="mb-2 text-sm text-muted">Power draw — last 48h</p>
+        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Power draw — last 48h</p>
         <MiniLineChart data={wattSeries} unit="W" xStartLabel="48h ago" xEndLabel="now" />
       </section>
 
       {/* Last water delivery — NOT AVAILABLE: no firmware or app concept of a
           "delivery" event exists today. */}
-      <section className="rounded-card bg-surface p-4">
-        <p className="text-sm text-muted">Last water delivery</p>
-        <p className="text-muted">Not available</p>
+      <section className="surface-lift rounded-card border border-border-soft bg-surface p-4">
+        <p className="text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Last water delivery</p>
+        <p className="mt-1 text-muted">Not available</p>
       </section>
     </div>
   );

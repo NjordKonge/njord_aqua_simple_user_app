@@ -8,4 +8,4 @@
  * stays fixed), so a glance at Home makes it obvious whether the latest
  * change actually installed.
  */
-export const BUILD_TAG = "Kiwi-7";
+export const BUILD_TAG = "Kiwi-8";

@@ -51,23 +51,29 @@ function SettingsScreen() {
   const prechlorination = prechlorinationFromConfig(config);
 
   return (
-    <div className="space-y-6">
+    <div className="stagger space-y-6">
       <Header />
       <h1 className="text-2xl font-semibold">Settings</h1>
 
       {/* Bluetooth */}
       <section>
         {device?.online ? (
-          <div className="space-y-2 rounded-card bg-surface p-4">
-            <p className="text-sm text-muted">Bluetooth</p>
-            <p className="text-good">Connected to {device.name}</p>
+          <div className="surface-lift space-y-3 rounded-card border border-border-soft bg-surface p-4">
+            <p className="text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Bluetooth</p>
+            <p className="flex items-center gap-2 text-good">
+              <span
+                className="h-2 w-2 shrink-0 animate-breathe rounded-full bg-good"
+                style={{ boxShadow: "0 0 10px var(--color-good)" }}
+              />
+              Connected to {device.name}
+            </p>
             <Button variant="secondary" onClick={() => void forgetDevice(device.id)}>
               Forget device
             </Button>
           </div>
         ) : device ? (
-          <div className="space-y-2 rounded-card bg-surface p-4">
-            <p className="text-sm text-muted">Bluetooth</p>
+          <div className="surface-lift space-y-3 rounded-card border border-border-soft bg-surface p-4">
+            <p className="text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Bluetooth</p>
             <Button onClick={() => void reconnectDevice(device.id)}>Reconnect</Button>
           </div>
         ) : (
@@ -77,8 +83,8 @@ function SettingsScreen() {
 
       {/* Tank setup */}
       <section>
-        <p className="mb-2 text-sm text-muted">Tank setup</p>
-        <div className="overflow-hidden rounded-card">
+        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Tank setup</p>
+        <div className="surface-lift overflow-hidden rounded-card border border-border-soft">
           <ListRow
             label="Tank model"
             value={tankModel ? TANK_MODEL_LABEL[tankModel] : "Not set"}
@@ -95,8 +101,8 @@ function SettingsScreen() {
 
       {/* Water source */}
       <section>
-        <p className="mb-2 text-sm text-muted">Water source</p>
-        <div className="overflow-hidden rounded-card">
+        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Water source</p>
+        <div className="surface-lift overflow-hidden rounded-card border border-border-soft">
           <ListRow
             label="Source type"
             value={waterSource ? WATER_SOURCE_LABEL[waterSource] : "Not set"}
@@ -107,10 +113,10 @@ function SettingsScreen() {
       </section>
 
       {/* Pre-chlorination */}
-      <section className="rounded-card bg-surface p-4">
-        <div className="mb-2 flex items-baseline justify-between">
-          <p className="text-sm text-muted">Pre-chlorination of incoming water</p>
-          <p className="font-medium">{prechlorination.toFixed(1)} mg/L</p>
+      <section className="surface-lift rounded-card border border-border-soft bg-surface p-4">
+        <div className="mb-3 flex items-baseline justify-between">
+          <p className="text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Pre-chlorination of incoming water</p>
+          <p className="tnum shrink-0 pl-3 font-semibold text-brand">{prechlorination.toFixed(1)} mg/L</p>
         </div>
         <input
           type="range"
@@ -123,13 +129,13 @@ function SettingsScreen() {
           className="w-full accent-[var(--color-brand)] disabled:opacity-50"
         />
         {!device?.online ? (
-          <p className="mt-2 text-xs text-muted">Connect to the device to change this setting.</p>
+          <p className="mt-2 text-xs text-faint">Connect to the device to change this setting.</p>
         ) : null}
       </section>
 
       {/* Electrode current */}
-      <section className="space-y-3 rounded-card bg-surface p-4">
-        <p className="text-sm text-muted">Electrode current</p>
+      <section className="surface-lift space-y-3 rounded-card border border-border-soft bg-surface p-4">
+        <p className="text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Electrode current</p>
         <p className="text-xs text-muted">
           The device drives the electrode with a PWM current controller (see AppStateMachine.cpp)
           that continuously adjusts the H-bridge duty cycle to track this target current — it is
@@ -144,8 +150,8 @@ function SettingsScreen() {
       </section>
 
       {/* Chlorination charge levels */}
-      <section className="space-y-3 rounded-card bg-surface p-4">
-        <p className="text-sm text-muted">Chlorination charge levels</p>
+      <section className="surface-lift space-y-3 rounded-card border border-border-soft bg-surface p-4">
+        <p className="text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Chlorination charge levels</p>
         <p className="text-xs text-muted">
           Sets how much charge the device delivers per cycle for the Normal and High chlorination
           modes on the Home screen, as a percentage of the theoretical max charge deliverable in
@@ -158,7 +164,7 @@ function SettingsScreen() {
         />
         <p className="text-xs text-muted">
           Theoretical max charge this cycle at {config?.target_ma ? config.target_ma / 1000 : "—"}A:{" "}
-          <span className="font-medium text-content">
+          <span className="tnum font-semibold text-content">
             {config?.cycle_s && config?.target_ma
               ? theoreticalMaxChargeC(config.cycle_s, config.target_ma)
               : "—"}{" "}

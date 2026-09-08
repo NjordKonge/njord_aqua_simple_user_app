@@ -1,3 +1,4 @@
+import { playTapFeedback } from "@/lib/ui/feedback";
 import { cn } from "@/lib/utils";
 
 /**
@@ -18,7 +19,7 @@ export function MiniBarChart({
   if (data.length === 0) {
     return (
       <div
-        className="flex items-center justify-center rounded-card bg-surface-muted text-sm text-muted"
+        className="surface-lift flex items-center justify-center rounded-card border border-border-soft bg-surface text-sm text-faint"
         style={{ height }}
       >
         No data yet
@@ -30,10 +31,10 @@ export function MiniBarChart({
   const gridValues = [0, max / 2, max];
 
   return (
-    <div>
+    <div className="surface-lift rounded-card border border-border-soft bg-surface p-3">
       <div className="flex" style={{ height }}>
         {/* Y-axis labels */}
-        <div className="flex flex-col justify-between pr-2 text-right text-xs text-muted">
+        <div className="tnum flex flex-col justify-between pr-2 text-right text-[9.5px] text-faint">
           {gridValues
             .slice()
             .reverse()
@@ -46,20 +47,32 @@ export function MiniBarChart({
         </div>
 
         {/* Bars */}
-        <div className="flex flex-1 items-end gap-1.5 border-l border-border pl-2">
+        <div className="flex flex-1 items-end gap-1.5 border-l border-border-soft pl-2">
           {data.map((d, i) => (
             <button
               key={i}
-              onClick={() => onSelect?.(i)}
-              className="flex flex-1 flex-col items-center justify-end gap-1"
+              onClick={() => {
+                playTapFeedback();
+                onSelect?.(i);
+              }}
+              className="press flex flex-1 flex-col items-center justify-end gap-1 self-stretch"
               aria-label={`${d.label}: ${d.value}${unit}`}
             >
               <div
                 className={cn(
-                  "w-full rounded-t-sm",
+                  "w-full rounded-t-[3px] transition-[height] duration-500 ease-[var(--ease-out-soft)]",
                   d.highlight ? "bg-brand" : "bg-surface-muted",
                 )}
-                style={{ height: `${(d.value / max) * 100}%`, minHeight: 2 }}
+                style={{
+                  height: `${(d.value / max) * 100}%`,
+                  minHeight: 2,
+                  backgroundImage: d.highlight
+                    ? "linear-gradient(to top, var(--color-brand-deep), var(--color-brand))"
+                    : "linear-gradient(to top, var(--color-surface-muted), var(--color-surface-raised))",
+                  boxShadow: d.highlight
+                    ? "0 0 12px color-mix(in oklab, var(--color-brand) 45%, transparent)"
+                    : undefined,
+                }}
               />
             </button>
           ))}
@@ -67,9 +80,15 @@ export function MiniBarChart({
       </div>
 
       {/* X-axis labels */}
-      <div className="mt-1 flex gap-1.5 pl-8">
+      <div className="mt-1.5 flex gap-1.5 pl-8">
         {data.map((d, i) => (
-          <span key={i} className="flex-1 text-center text-[10px] text-muted">
+          <span
+            key={i}
+            className={cn(
+              "flex-1 text-center text-[9.5px]",
+              d.highlight ? "font-medium text-brand" : "text-faint",
+            )}
+          >
             {d.label}
           </span>
         ))}

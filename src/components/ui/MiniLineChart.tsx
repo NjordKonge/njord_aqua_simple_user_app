@@ -1,6 +1,13 @@
+import { useId } from "react";
+
 /**
  * Minimal, dependency-free line chart with labeled axes (Y min/mid/max +
  * unit, X start/end), per spec's chart labeling requirement.
+ *
+ * The trace is drawn as a stroked line plus a gradient area fading to nothing
+ * beneath it, with a lit dot on the most recent sample. The area is what
+ * gives a sparse, noisy series visual weight; the end dot answers "which end
+ * is now" without needing to read the axis label.
  */
 export function MiniLineChart({
   data,
@@ -17,10 +24,13 @@ export function MiniLineChart({
   height?: number;
   emptyLabel?: string;
 }) {
+  // Gradient ids must be unique per instance — several charts share a page.
+  const gradId = useId().replace(/:/g, "");
+
   if (data.length === 0) {
     return (
       <div
-        className="flex items-center justify-center rounded-card bg-surface-muted text-sm text-muted"
+        className="surface-lift flex items-center justify-center rounded-card border border-border-soft bg-surface text-sm text-faint"
         style={{ height }}
       >
         {emptyLabel}
@@ -44,45 +54,79 @@ export function MiniLineChart({
   const tMax = data[data.length - 1].t || tMin + 1;
   const tSpan = tMax - tMin || 1;
 
-  const points = data
-    .map((d) => {
-      const x = padLeft + ((d.t - tMin) / tSpan) * plotW;
-      const y = padTop + (1 - (d.v - min) / span) * plotH;
-      return `${x},${y}`;
-    })
-    .join(" ");
+  const xy = data.map((d) => ({
+    x: padLeft + ((d.t - tMin) / tSpan) * plotW,
+    y: padTop + (1 - (d.v - min) / span) * plotH,
+  }));
+  const points = xy.map((p) => `${p.x},${p.y}`).join(" ");
+  const baseline = padTop + plotH;
+  // Same path as the line, closed down to the baseline, for the area fill.
+  const areaPoints = `${xy[0].x},${baseline} ${points} ${xy[xy.length - 1].x},${baseline}`;
+  const last = xy[xy.length - 1];
 
   const yAt = (v: number) => padTop + (1 - (v - min) / span) * plotH;
 
   return (
-    <svg viewBox={`0 0 ${width} ${height + 16}`} className="w-full">
-      {/* Y gridlines + labels */}
-      {[min, mid, max].map((v, i) => (
-        <g key={i}>
-          <line
-            x1={padLeft}
-            x2={width}
-            y1={yAt(v)}
-            y2={yAt(v)}
-            stroke="var(--color-border)"
-            strokeWidth="1"
-          />
-          <text x={0} y={yAt(v) + 4} fontSize="10" fill="var(--color-muted)">
-            {Math.round(v)}
-            {unit}
-          </text>
-        </g>
-      ))}
+    <div className="surface-lift rounded-card border border-border-soft bg-surface p-3">
+      <svg viewBox={`0 0 ${width} ${height + 16}`} className="w-full">
+        <defs>
+          <linearGradient id={`area-${gradId}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--color-brand)" stopOpacity="0.34" />
+            <stop offset="100%" stopColor="var(--color-brand)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
 
-      <polyline points={points} fill="none" stroke="var(--color-brand)" strokeWidth="2" />
+        {/* Y gridlines + labels. Dashed and dim so they sit behind the data
+            rather than competing with it. */}
+        {[min, mid, max].map((v, i) => (
+          <g key={i}>
+            <line
+              x1={padLeft}
+              x2={width}
+              y1={yAt(v)}
+              y2={yAt(v)}
+              stroke="var(--color-border)"
+              strokeWidth="1"
+              strokeDasharray="2 4"
+            />
+            <text x={0} y={yAt(v) + 4} fontSize="9.5" fill="var(--color-faint)">
+              {Math.round(v)}
+              {unit}
+            </text>
+          </g>
+        ))}
 
-      {/* X start/end labels */}
-      <text x={padLeft} y={height + 14} fontSize="10" fill="var(--color-muted)">
-        {xStartLabel}
-      </text>
-      <text x={width} y={height + 14} fontSize="10" fill="var(--color-muted)" textAnchor="end">
-        {xEndLabel}
-      </text>
-    </svg>
+        <polygon points={areaPoints} fill={`url(#area-${gradId})`} />
+
+        <polyline
+          points={points}
+          fill="none"
+          stroke="var(--color-brand)"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ filter: "drop-shadow(0 0 4px color-mix(in srgb, var(--color-brand) 55%, transparent))" }}
+        />
+
+        {/* Latest sample */}
+        <circle
+          cx={last.x}
+          cy={last.y}
+          r="3"
+          fill="var(--color-brand)"
+          stroke="var(--color-surface)"
+          strokeWidth="1.5"
+          style={{ filter: "drop-shadow(0 0 6px var(--color-brand))" }}
+        />
+
+        {/* X start/end labels */}
+        <text x={padLeft} y={height + 14} fontSize="9.5" fill="var(--color-faint)">
+          {xStartLabel}
+        </text>
+        <text x={width} y={height + 14} fontSize="9.5" fill="var(--color-faint)" textAnchor="end">
+          {xEndLabel}
+        </text>
+      </svg>
+    </div>
   );
 }

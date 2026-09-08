@@ -1,6 +1,7 @@
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
+import { playTapFeedback } from "@/lib/ui/feedback";
 
 /** Flat list row on a slightly lighter surface, per spec. Chevron when it opens a picker. */
 export function ListRow({
@@ -22,9 +23,18 @@ export function ListRow({
   const Comp = clickable ? "button" : "div";
   return (
     <Comp
-      onClick={clickable ? onClick : undefined}
+      onClick={
+        clickable
+          ? () => {
+              playTapFeedback();
+              onClick?.();
+            }
+          : undefined
+      }
       className={cn(
-        "flex w-full items-center justify-between gap-3 bg-surface-muted px-4 py-3.5 text-left first:rounded-t-card last:rounded-b-card",
+        "flex w-full items-center justify-between gap-3 bg-surface-muted px-4 py-3.5 text-left",
+        "not-last:border-b not-last:border-border-soft first:rounded-t-card last:rounded-b-card",
+        clickable && "press active:bg-surface-raised",
         disabled && "opacity-50",
         className,
       )}
@@ -32,8 +42,11 @@ export function ListRow({
       <span className="text-content">{label}</span>
       <span className="flex items-center gap-2 text-muted">
         {value}
-        {chevron && clickable ? <ChevronRight size={18} /> : null}
+        {chevron && clickable ? (
+          <ChevronRight size={17} className="text-faint" />
+        ) : null}
       </span>
     </Comp>
   );
 }
+

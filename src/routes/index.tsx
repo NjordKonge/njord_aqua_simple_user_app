@@ -7,7 +7,7 @@ import { useDeviceSummary } from "@/lib/device/useDeviceSummary";
 import { startTreatment, stopTreatment, clearFault, pairDevice } from "@/lib/device/actions";
 import { requestTankReading } from "@/lib/device/tank";
 import { setDosingMode, type DosingMode } from "@/lib/device/dosing";
-import { playModeChangeFeedback } from "@/lib/ui/feedback";
+import { playModeChangeFeedback, playConfirmFeedback, playAbortFeedback } from "@/lib/ui/feedback";
 import { BUILD_TAG } from "@/lib/buildInfo";
 import { Header } from "@/components/layout/Header";
 import { StatusRow } from "@/components/device/StatusRow";
@@ -107,29 +107,35 @@ function HomeScreen() {
 
   if (!device) {
     return (
-      <div>
+      <div className="stagger">
         <Header />
-        <div className="space-y-4 rounded-card bg-surface p-5">
+        <div className="surface-lift space-y-4 rounded-card border border-border-soft bg-surface p-5">
           <p className="text-muted">Connect your Njord Aqua to get started.</p>
           <Button onClick={() => void pairDevice()}>Connect device</Button>
         </div>
-        <p className="mt-4 text-center text-xs text-muted">Build {BUILD_TAG}</p>
+        <p className="mt-4 text-center text-xs text-faint">Build {BUILD_TAG}</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="stagger space-y-6">
       <Header
         right={
-          <button aria-label="Settings" onClick={() => navigate({ to: "/settings" })}>
-            <SettingsIcon size={22} className="text-muted" />
+          <button
+            aria-label="Settings"
+            onClick={() => navigate({ to: "/settings" })}
+            className="press rounded-full p-1.5 text-muted"
+          >
+            <SettingsIcon size={21} />
           </button>
         }
       />
 
-      <p className="text-sm text-muted">Overview of Tank 1</p>
-      <p className="-mt-4 text-xs text-muted">Build {BUILD_TAG}</p>
+      <div className="flex items-baseline justify-between">
+        <p className="text-sm text-muted">Overview of Tank 1</p>
+        <p className="text-[0.6875rem] tracking-wide text-faint">{BUILD_TAG}</p>
+      </div>
 
       <StatusRow
         tone={waterStatus.tone}
@@ -147,7 +153,7 @@ function HomeScreen() {
           <Metric icon={Droplets} label="Water used today" value="Not available" muted />
         </div>
 
-        <div className="flex flex-col items-center justify-start rounded-card bg-surface p-4">
+        <div className="surface-lift flex flex-col items-center justify-start rounded-card border border-border-soft bg-surface p-4">
           <TankGraphic
             percent={tank.percent}
             liters={tank.liters}
@@ -155,19 +161,35 @@ function HomeScreen() {
             low={tank.low}
             hasReading={tank.hasReading}
           />
-          <p className="mt-3 text-sm font-medium">{name}</p>
-          <p className={cn("text-xs", device.online ? "text-good" : "text-bad")}>
+          <p className="mt-3 text-sm font-semibold">{name}</p>
+          <span
+            className={cn(
+              "mt-1 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[0.6875rem] font-medium",
+              device.online ? "bg-good/12 text-good" : "bg-bad/12 text-bad",
+            )}
+          >
+            <span
+              className={cn(
+                "h-1.5 w-1.5 rounded-full",
+                device.online ? "animate-breathe bg-good" : "bg-bad",
+              )}
+            />
             {device.online ? "Connected" : "Not connected"}
-          </p>
+          </span>
         </div>
       </div>
 
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted">Chlorination mode</p>
-        <button aria-label="More information" onClick={() => setModeInfoOpen(true)} className="text-muted">
+        <button
+          aria-label="More information"
+          onClick={() => setModeInfoOpen(true)}
+          className="press rounded-full p-1 text-faint"
+        >
           <HelpCircle size={18} />
         </button>
       </div>
+
       <ElectrolysisLed online={device.online} on={electrolysisOn} />
       <DosingModeToggle
         mode={displayedMode}
@@ -186,10 +208,18 @@ function HomeScreen() {
       />
 
       {attention.length > 0 ? (
-        <div className="space-y-2 rounded-card bg-surface p-4">
-          <p className="text-sm text-muted">Needs attention</p>
+        <div
+          className="surface-lift space-y-2 rounded-card border border-border-soft bg-surface p-4"
+          style={{
+            backgroundImage:
+              "linear-gradient(100deg, color-mix(in srgb, var(--color-warn) 10%, transparent), transparent 55%)",
+          }}
+        >
+          <p className="text-[0.6875rem] font-medium uppercase tracking-wider text-warn">
+            Needs attention
+          </p>
           {attention.map((message) => (
-            <p key={message} className="text-sm">
+            <p key={message} className="text-sm leading-snug">
               {message}
             </p>
           ))}
@@ -198,15 +228,34 @@ function HomeScreen() {
 
       <div className="space-y-3">
         {actions.canStop ? (
-          <Button variant="secondary" onClick={() => void stopTreatment(device.id)}>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              playAbortFeedback();
+              void stopTreatment(device.id);
+            }}
+          >
             Stop
           </Button>
         ) : null}
         {actions.canStart ? (
-          <Button onClick={() => void startTreatment(device.id)}>Start</Button>
+          <Button
+            onClick={() => {
+              playConfirmFeedback();
+              void startTreatment(device.id);
+            }}
+          >
+            Start
+          </Button>
         ) : null}
         {actions.canClearFault ? (
-          <Button variant="danger" onClick={() => void clearFault(device.id)}>
+          <Button
+            variant="danger"
+            onClick={() => {
+              playAbortFeedback();
+              void clearFault(device.id);
+            }}
+          >
             Reset fault
           </Button>
         ) : null}
@@ -252,12 +301,17 @@ function Metric({
   muted?: boolean;
 }) {
   return (
-    <div className="rounded-card bg-surface p-4">
-      <div className="flex items-center gap-2 text-muted">
-        <Icon size={16} />
-        <span className="text-xs">{label}</span>
+    <div className="surface-lift rounded-card border border-border-soft bg-surface p-4">
+      <div className="flex items-center gap-2 text-faint">
+        <Icon size={15} strokeWidth={2.1} />
+        <span className="text-[0.6875rem] font-medium uppercase tracking-wider">{label}</span>
       </div>
-      <p className={cn("mt-1 text-xl font-semibold", muted && "text-muted text-base font-normal")}>
+      <p
+        className={cn(
+          "tnum mt-1.5 text-[1.375rem] font-semibold leading-tight",
+          muted && "text-muted text-sm font-normal",
+        )}
+      >
         {value}
       </p>
     </div>
@@ -269,22 +323,53 @@ function Metric({
  * driven right now. Sourced straight from the device's live `elec_on`
  * status field (not from the app's dosingMode/config assumptions) so it
  * reflects reality even during a cycle's REST phase, faults, or offline.
+ *
+ * When lit it genuinely emits: a breathing core, a static halo ring and a
+ * faint wash across the row, so you can read "it's working" from across the
+ * room without parsing the text.
  */
 function ElectrolysisLed({ online, on }: { online: boolean; on: boolean }) {
+  const lit = online && on;
   return (
-    <div className="flex items-center gap-2 rounded-card bg-surface px-4 py-2.5">
+    <div
+      className="surface-lift flex items-center gap-2.5 rounded-card border border-border-soft bg-surface px-4 py-3 transition-all duration-500"
+      style={
+        lit
+          ? {
+              backgroundImage:
+                "linear-gradient(100deg, color-mix(in srgb, var(--color-good) 12%, transparent), transparent 50%)",
+            }
+          : undefined
+      }
+    >
+      <span className="relative flex h-2.5 w-2.5 shrink-0 items-center justify-center">
+        <span
+          className={cn(
+            "h-2.5 w-2.5 rounded-full transition-colors duration-500",
+            lit ? "animate-breathe bg-good" : "bg-surface-raised",
+          )}
+          style={
+            lit
+              ? { boxShadow: "0 0 0 3px color-mix(in srgb, var(--color-good) 18%, transparent), 0 0 14px var(--color-good)" }
+              : undefined
+          }
+        />
+      </span>
+      <span className="text-[0.6875rem] font-medium uppercase tracking-wider text-muted">
+        Electrolysis
+      </span>
       <span
         className={cn(
-          "h-2.5 w-2.5 shrink-0 rounded-full",
-          online ? (on ? "bg-good" : "bg-border") : "bg-border",
+          "ml-auto text-[0.6875rem] font-semibold uppercase tracking-wider transition-colors duration-500",
+          lit ? "text-good" : "text-faint",
         )}
-      />
-      <span className="text-xs text-muted">
-        Electrolysis {online ? (on ? "ON" : "OFF") : "—"}
+      >
+        {online ? (on ? "On" : "Off") : "—"}
       </span>
     </div>
   );
 }
+
 
 function DosingModeToggle({
   mode,
@@ -300,20 +385,46 @@ function DosingModeToggle({
   ];
   // Static lookup (never build Tailwind class names via template literals —
   // the JIT scanner won't pick them up).
-  const SELECTED_BG: Record<DosingMode, string> = {
-    off: "bg-bad text-content",
-    normal: "bg-good text-bg",
-    high: "bg-good-strong text-content",
+  const SELECTED_TEXT: Record<DosingMode, string> = {
+    off: "text-content",
+    normal: "text-bg",
+    high: "text-content",
   };
+  // CSS colour expressions for the sliding thumb — these feed gradients and
+  // shadows, so they can't be Tailwind classes.
+  const THUMB_COLOR: Record<DosingMode, string> = {
+    off: "var(--color-bad)",
+    normal: "var(--color-good)",
+    high: "var(--color-good-strong)",
+  };
+
+  const activeIndex = Math.max(0, options.findIndex((o) => o.value === mode));
+  const thumb = THUMB_COLOR[mode];
+
   return (
-    <div className="grid grid-cols-3 gap-2 rounded-card bg-surface-muted p-1">
+    // One thumb that slides between the three slots (and cross-fades its
+    // colour) rather than three independently-toggling backgrounds — the
+    // travel is what makes a mode change feel like moving a physical switch,
+    // and it also visually connects the mode you left to the one you chose.
+    <div className="surface-lift relative grid grid-cols-3 gap-2 rounded-card border border-border-soft bg-surface-muted p-1">
+      <span
+        aria-hidden
+        className="absolute inset-y-1 left-1 rounded-[calc(var(--radius-card)-0.25rem)] transition-all duration-[350ms] ease-[var(--ease-spring)]"
+        style={{
+          width: `calc((100% - 0.5rem) / 3)`,
+          transform: `translateX(${activeIndex * 100}%)`,
+          backgroundImage: `linear-gradient(to bottom, color-mix(in srgb, ${thumb} 88%, white), ${thumb})`,
+          boxShadow: `0 1px 0 rgb(255 255 255 / 0.16) inset, 0 6px 16px -8px ${thumb}`,
+        }}
+      />
       {options.map((opt) => (
         <button
           key={opt.value}
           onClick={() => onChange(opt.value)}
           className={cn(
-            "rounded-card px-3 py-3 text-sm font-medium transition-colors",
-            opt.value === mode ? SELECTED_BG[opt.value] : "text-muted",
+            "relative rounded-card px-3 py-3 text-sm font-semibold transition-colors duration-200",
+            "active:scale-[0.97] transition-transform",
+            opt.value === mode ? SELECTED_TEXT[opt.value] : "text-muted",
           )}
         >
           {opt.label}
@@ -322,4 +433,5 @@ function DosingModeToggle({
     </div>
   );
 }
+
 
