@@ -1,10 +1,6 @@
 import { cn } from "@/lib/utils";
 
 const TANK_IMAGE_SRC = "/Njord_icon_app.png";
-// Natural pixel dimensions of the artwork (see public/Njord_icon_app.png) —
-// locks the aspect ratio so the dimmed base copy and the coloured fill copy
-// below never drift apart from each other.
-const TANK_IMAGE_ASPECT = 2099 / 1576;
 
 /**
  * Tank artwork: the actual Njord tank render (public/Njord_icon_app.png),
@@ -54,11 +50,8 @@ export function TankGraphic({
   } as const;
 
   return (
-    <div className="flex flex-col items-center">
-      <div
-        className="relative w-full max-w-[320px]"
-        style={{ aspectRatio: TANK_IMAGE_ASPECT }}
-      >
+    <div className="flex h-full w-full flex-col items-center">
+      <div className="relative w-full min-h-0 flex-1">
         {/* Ambient bloom behind the tank, tinted by fill state. */}
         <div
           aria-hidden
@@ -108,7 +101,7 @@ export function TankGraphic({
         </div>
       </div>
 
-      <p className={cn("tnum mt-2 text-sm font-semibold", low ? "text-warn" : "text-content")}>
+      <p className={cn("tnum mt-2 shrink-0 text-sm font-semibold", low ? "text-warn" : "text-content")}>
         {hasReading && liters !== null
           ? `${Math.round(liters)}L of ${capacityLiters}L`
           : "Level unknown"}

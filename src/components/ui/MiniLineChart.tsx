@@ -16,6 +16,7 @@ export function MiniLineChart({
   xEndLabel,
   height = 140,
   emptyLabel = "No data yet",
+  color = "var(--color-brand)",
 }: {
   data: Array<{ t: number; v: number }>;
   unit: string;
@@ -23,6 +24,9 @@ export function MiniLineChart({
   xEndLabel: string;
   height?: number;
   emptyLabel?: string;
+  /** Trace/area/dot color — CSS color value. Lets each chart on a page read
+   *  as distinct at a glance instead of all sharing the same brand blue. */
+  color?: string;
 }) {
   // Gradient ids must be unique per instance — several charts share a page.
   const gradId = useId().replace(/:/g, "");
@@ -71,8 +75,8 @@ export function MiniLineChart({
       <svg viewBox={`0 0 ${width} ${height + 16}`} className="w-full">
         <defs>
           <linearGradient id={`area-${gradId}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--color-brand)" stopOpacity="0.34" />
-            <stop offset="100%" stopColor="var(--color-brand)" stopOpacity="0" />
+            <stop offset="0%" stopColor={color} stopOpacity="0.34" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
           </linearGradient>
         </defs>
 
@@ -101,11 +105,11 @@ export function MiniLineChart({
         <polyline
           points={points}
           fill="none"
-          stroke="var(--color-brand)"
+          stroke={color}
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          style={{ filter: "drop-shadow(0 0 4px color-mix(in srgb, var(--color-brand) 55%, transparent))" }}
+          style={{ filter: `drop-shadow(0 0 4px color-mix(in srgb, ${color} 55%, transparent))` }}
         />
 
         {/* Latest sample */}
@@ -113,10 +117,10 @@ export function MiniLineChart({
           cx={last.x}
           cy={last.y}
           r="3"
-          fill="var(--color-brand)"
+          fill={color}
           stroke="var(--color-surface)"
           strokeWidth="1.5"
-          style={{ filter: "drop-shadow(0 0 6px var(--color-brand))" }}
+          style={{ filter: `drop-shadow(0 0 6px ${color})` }}
         />
 
         {/* X start/end labels */}

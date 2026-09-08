@@ -9,8 +9,8 @@ import {
   useMergedTelemetry,
   useMergedSonar,
   RANGE_WINDOW_MS,
-  RANGE_SINCE_LABEL,
   RANGE_SHORT_LABEL,
+  chartAxisLabels,
   type HistoryRange,
 } from "@/lib/device/history";
 import { MiniLineChart } from "@/components/ui/MiniLineChart";
@@ -21,6 +21,18 @@ import { CycleRing } from "@/components/device/CycleRing";
 export const Route = createFileRoute("/overview")({
   component: OverviewScreen,
 });
+
+// Each chart gets its own shade along a single blue → white ramp (anchored to
+// the brand color so it stays in sync with the rest of the theme) instead of
+// every trace using identical brand blue — makes five stacked charts
+// scannable at a glance instead of a wall of same-colored lines.
+const CHART_COLORS = {
+  temp: "var(--color-brand)",
+  tank: "color-mix(in srgb, var(--color-brand) 80%, white)",
+  volt: "color-mix(in srgb, var(--color-brand) 60%, white)",
+  amp: "color-mix(in srgb, var(--color-brand) 38%, white)",
+  watt: "color-mix(in srgb, var(--color-brand) 18%, white)",
+} as const;
 
 function OverviewScreen() {
   const navigate = useNavigate();
@@ -43,7 +55,6 @@ function OverviewScreen() {
   );
 
   const since = Date.now() - RANGE_WINDOW_MS[range];
-  const sinceLabel = RANGE_SINCE_LABEL[range];
   const rangeShort = RANGE_SHORT_LABEL[range];
 
   const mergedTelemetry = useMergedTelemetry(logEntries, telemetry, since);
@@ -73,6 +84,15 @@ function OverviewScreen() {
     () => mergedSonar.map((s) => ({ t: s.t, v: s.dist_mm })),
     [mergedSonar],
   );
+
+  // Axis labels are derived from whatever is ACTUALLY plotted, not the
+  // nominal requested window — a chart with only 3h of real samples must
+  // say "3h ago", never "24h ago" just because the Daily tab is selected.
+  const tempLabels = chartAxisLabels(tempSeries);
+  const tankLabels = chartAxisLabels(recentSonar);
+  const voltLabels = chartAxisLabels(voltSeries);
+  const ampLabels = chartAxisLabels(ampSeries);
+  const wattLabels = chartAxisLabels(wattSeries);
 
 
   return (
@@ -120,8 +140,9 @@ function OverviewScreen() {
         <MiniLineChart
           data={tempSeries}
           unit="°C"
-          xStartLabel={sinceLabel}
-          xEndLabel="now"
+          xStartLabel={tempLabels.start}
+          xEndLabel={tempLabels.end}
+          color={CHART_COLORS.temp}
           emptyLabel={historyLoading ? "Loading device history…" : "No data yet"}
         />
       </section>
@@ -133,8 +154,9 @@ function OverviewScreen() {
         <MiniLineChart
           data={recentSonar}
           unit="mm"
-          xStartLabel={sinceLabel}
-          xEndLabel="now"
+          xStartLabel={tankLabels.start}
+          xEndLabel={tankLabels.end}
+          color={CHART_COLORS.tank}
           emptyLabel={historyLoading ? "Loading device history…" : "No sonar readings taken yet"}
         />
       </section>
@@ -146,8 +168,9 @@ function OverviewScreen() {
         <MiniLineChart
           data={voltSeries}
           unit="V"
-          xStartLabel={sinceLabel}
-          xEndLabel="now"
+          xStartLabel={voltLabels.start}
+          xEndLabel={voltLabels.end}
+          color={CHART_COLORS.volt}
           emptyLabel={historyLoading ? "Loading device history…" : "No data yet"}
         />
       </section>
@@ -159,8 +182,9 @@ function OverviewScreen() {
         <MiniLineChart
           data={ampSeries}
           unit="mA"
-          xStartLabel={sinceLabel}
-          xEndLabel="now"
+          xStartLabel={ampLabels.start}
+          xEndLabel={ampLabels.end}
+          color={CHART_COLORS.amp}
           emptyLabel={historyLoading ? "Loading device history…" : "No data yet"}
         />
       </section>
@@ -172,8 +196,9 @@ function OverviewScreen() {
         <MiniLineChart
           data={wattSeries}
           unit="W"
-          xStartLabel={sinceLabel}
-          xEndLabel="now"
+          xStartLabel={wattLabels.start}
+          xEndLabel={wattLabels.end}
+          color={CHART_COLORS.watt}
           emptyLabel={historyLoading ? "Loading device history…" : "No data yet"}
         />
       </section>

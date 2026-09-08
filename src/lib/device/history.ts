@@ -30,19 +30,41 @@ export const RANGE_WINDOW_MS: Record<HistoryRange, number> = {
   monthly: 30 * 24 * 60 * 60 * 1000,
 };
 
-/** Label for chart x-axis start (end is always "now"). */
-export const RANGE_SINCE_LABEL: Record<HistoryRange, string> = {
-  daily: "24h ago",
-  weekly: "7d ago",
-  monthly: "30d ago",
-};
-
 /** Short form for section headings, e.g. "Water temperature — last 24h". */
 export const RANGE_SHORT_LABEL: Record<HistoryRange, string> = {
   daily: "24h",
   weekly: "7d",
   monthly: "30d",
 };
+
+/** Formats a host ms timestamp as a short relative "X ago" label. Used for
+ *  chart x-axis labels, always computed from the actual oldest/newest
+ *  PLOTTED sample rather than the nominal requested window — a chart with
+ *  only 3h of real data must say "3h ago", never "24h ago", even when the
+ *  request asked for a 24h window. */
+export function formatRelativeAgo(ms: number): string {
+  const diffMs = Date.now() - ms;
+  if (diffMs < 45_000) return "just now";
+  const mins = Math.round(diffMs / 60_000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(diffMs / 3_600_000);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(diffMs / 86_400_000);
+  if (days < 14) return `${days}d ago`;
+  const weeks = Math.round(days / 7);
+  return `${weeks}w ago`;
+}
+
+/** X-axis start/end labels for a chart series, derived from the samples
+ *  actually being drawn (not the requested range) so they can never claim
+ *  the chart reaches further back — or more recent — than it really does. */
+export function chartAxisLabels(series: Array<{ t: number }>): { start: string; end: string } {
+  if (series.length === 0) return { start: "", end: "" };
+  const start = formatRelativeAgo(series[0].t);
+  const lastT = series[series.length - 1].t;
+  const end = Date.now() - lastT < 120_000 ? "now" : formatRelativeAgo(lastT);
+  return { start, end };
+}
 
 /** Host `Date.now()`-style ms → device wire epoch (whole seconds since
  *  2000-01-01 UTC, BLE_API_SPEC.md §6). */

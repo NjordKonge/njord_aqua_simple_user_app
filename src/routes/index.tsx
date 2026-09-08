@@ -153,18 +153,25 @@ function HomeScreen() {
           <Metric icon={Droplets} label="Water used today" value="Not available" muted />
         </div>
 
-        <div className="surface-lift flex flex-col items-center justify-center rounded-card border border-border-soft bg-surface p-4">
-          <TankGraphic
-            percent={tank.percent}
-            liters={tank.liters}
-            capacityLiters={tank.capacityLiters}
-            low={tank.low}
-            hasReading={tank.hasReading}
-          />
-          <p className="mt-3 text-sm font-semibold">{name}</p>
+        <div className="surface-lift flex flex-col items-center rounded-card border border-border-soft bg-surface p-4">
+          {/* This wrapper is what actually stretches to consume the card's
+              full available height (the grid row is already stretched to
+              match the metrics column) — TankGraphic grows its own image
+              area to fill it, rather than being centered as a smaller fixed
+              block with wasted space above/below. */}
+          <div className="min-h-0 w-full flex-1">
+            <TankGraphic
+              percent={tank.percent}
+              liters={tank.liters}
+              capacityLiters={tank.capacityLiters}
+              low={tank.low}
+              hasReading={tank.hasReading}
+            />
+          </div>
+          <p className="mt-3 shrink-0 text-sm font-semibold">{name}</p>
           <span
             className={cn(
-              "mt-1 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[0.6875rem] font-medium",
+              "mt-1 inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[0.6875rem] font-medium",
               device.online ? "bg-good/12 text-good" : "bg-bad/12 text-bad",
             )}
           >
