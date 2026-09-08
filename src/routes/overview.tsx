@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import { useDevices, useTelemetry, useSonarHistory } from "@/lib/device/store";
-import { wattsFromTelemetry } from "@/lib/device/power";
+import { wattsFromTelemetry, voltsFromTelemetry } from "@/lib/device/power";
 import { MiniLineChart } from "@/components/ui/MiniLineChart";
 import { MiniBarChart } from "@/components/ui/MiniBarChart";
 import { PillTabs } from "@/components/ui/PillTabs";
@@ -31,6 +31,10 @@ function OverviewScreen() {
   );
   const wattSeries = useMemo(
     () => recent.map((s) => ({ t: s.t, v: wattsFromTelemetry(s) })),
+    [recent],
+  );
+  const voltSeries = useMemo(
+    () => recent.map((s) => ({ t: s.t, v: voltsFromTelemetry(s) })),
     [recent],
   );
   const ampSeries = useMemo(
@@ -97,13 +101,18 @@ function OverviewScreen() {
       </section>
 
       <section>
-        <p className="mb-2 text-sm text-muted">Power draw — last 48h</p>
-        <MiniLineChart data={wattSeries} unit="W" xStartLabel="48h ago" xEndLabel="now" />
+        <p className="mb-2 text-sm text-muted">Electrode voltage — last 48h</p>
+        <MiniLineChart data={voltSeries} unit="V" xStartLabel="48h ago" xEndLabel="now" />
       </section>
 
       <section>
         <p className="mb-2 text-sm text-muted">Electrode current — last 48h</p>
         <MiniLineChart data={ampSeries} unit="mA" xStartLabel="48h ago" xEndLabel="now" />
+      </section>
+
+      <section>
+        <p className="mb-2 text-sm text-muted">Power draw — last 48h</p>
+        <MiniLineChart data={wattSeries} unit="W" xStartLabel="48h ago" xEndLabel="now" />
       </section>
 
       {/* Last water delivery — NOT AVAILABLE: no firmware or app concept of a

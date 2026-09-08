@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Settings as SettingsIcon, Thermometer, Zap, Droplets, HelpCircle } from "lucide-react";
-import { useDevices } from "@/lib/device/store";
+import { useDevices, useCommands } from "@/lib/device/store";
+import type { CommandEntry } from "@/lib/device/types";
 import { useDeviceSummary } from "@/lib/device/useDeviceSummary";
 import { startTreatment, stopTreatment, clearFault, pairDevice } from "@/lib/device/actions";
 import { requestTankReading } from "@/lib/device/tank";
@@ -29,29 +30,49 @@ function HomeScreen() {
   const devices = useDevices();
   const deviceId = devices[0]?.id;
   const summary = useDeviceSummary(deviceId);
-  const { device, name, status, waterStatus, health, watts, tank, dosingMode, actions, attention } =
-    summary;
+  const {
+    device, name, status, waterStatus, health, watts, tank, dosingMode, cycleSeconds,
+    electrolysisOn, actions, attention,
+  } = summary;
   const [infoOpen, setInfoOpen] = useState(false);
   const [modeInfoOpen, setModeInfoOpen] = useState(false);
 
   // Optimistic mode display: SETCFG/START/STOP round-trip over BLE (ack,
   // then a separate config re-read) before `dosingMode` derived from the
   // real config catches up — visibly laggy otherwise. Show the tapped mode
-  // immediately, then let it settle once the device confirms; if nothing
-  // confirms within a few seconds (command failed, disconnect, etc.), fall
-  // back to the real device-derived mode rather than lying indefinitely.
+  // immediately, then let it settle once the device confirms.
+  //
+  // Reconciliation is tied to the actual command's outcome (via useCommands,
+  // which re-renders whenever any command's status changes) rather than a
+  // fixed timeout: an earlier version cleared `pendingMode` after a flat 6s,
+  // which — under normal BLE latency variance — would occasionally fire
+  // before the real confirmation arrived, flashing back to the OLD mode for
+  // a moment before flipping to the new one once refreshConfig caught up.
+  // That looked exactly like "the mode switches by itself". Waiting for the
+  // command's own resolution (it already carries a 5s ack timeout, see
+  // store.ts sendCommand) avoids that false revert.
   const [pendingMode, setPendingMode] = useState<DosingMode | null>(null);
+  const pendingEntryRef = useRef<CommandEntry | null>(null);
   const displayedMode = pendingMode ?? dosingMode;
-
-  useEffect(() => {
-    if (pendingMode !== null && dosingMode === pendingMode) setPendingMode(null);
-  }, [dosingMode, pendingMode]);
+  const commands = useCommands(device?.id);
 
   useEffect(() => {
     if (pendingMode === null) return;
-    const id = setTimeout(() => setPendingMode(null), 6000);
-    return () => clearTimeout(id);
-  }, [pendingMode]);
+    if (dosingMode === pendingMode) {
+      setPendingMode(null);
+      pendingEntryRef.current = null;
+      return;
+    }
+    if (pendingEntryRef.current?.status === "error") {
+      // The command itself failed (device not connected, timeout, NACK) —
+      // stop showing the tapped mode and fall back to the real one.
+      setPendingMode(null);
+      pendingEntryRef.current = null;
+    }
+    // `commands` isn't read directly, but useCommands(device.id) re-renders
+    // this component whenever any command for this device changes status,
+    // which is what lets the check above see the entry's latest status.
+  }, [dosingMode, pendingMode, commands]);
 
   useEffect(() => {
     if (!device?.online) return;
@@ -121,12 +142,13 @@ function HomeScreen() {
           <HelpCircle size={18} />
         </button>
       </div>
+      <ElectrolysisLed online={device.online} on={electrolysisOn} />
       <DosingModeToggle
         mode={displayedMode}
         onChange={(mode) => {
           setPendingMode(mode);
           playModeChangeFeedback(mode);
-          setDosingMode(device.id, mode);
+          pendingEntryRef.current = setDosingMode(device.id, mode, cycleSeconds);
         }}
       />
 
@@ -205,6 +227,28 @@ function Metric({
       <p className={cn("mt-1 text-xl font-semibold", muted && "text-muted text-base font-normal")}>
         {value}
       </p>
+    </div>
+  );
+}
+
+/**
+ * Physical-LED-style indicator for whether the electrode is actively being
+ * driven right now. Sourced straight from the device's live `elec_on`
+ * status field (not from the app's dosingMode/config assumptions) so it
+ * reflects reality even during a cycle's REST phase, faults, or offline.
+ */
+function ElectrolysisLed({ online, on }: { online: boolean; on: boolean }) {
+  return (
+    <div className="flex items-center gap-2 rounded-card bg-surface px-4 py-2.5">
+      <span
+        className={cn(
+          "h-2.5 w-2.5 shrink-0 rounded-full",
+          online ? (on ? "bg-good" : "bg-border") : "bg-border",
+        )}
+      />
+      <span className="text-xs text-muted">
+        Electrolysis {online ? (on ? "ON" : "OFF") : "—"}
+      </span>
     </div>
   );
 }

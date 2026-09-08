@@ -17,6 +17,7 @@ import {
 } from "@/lib/device/prechlorination";
 import { useTankModel, setTankModel, TANK_MODEL_LABEL, type TankModel } from "@/lib/settings/tankSettings";
 import { useChlorinationLevels, setChlorinationLevels } from "@/lib/settings/chlorinationSettings";
+import { MAX_CURRENT_CAP_A, theoreticalMaxChargeC } from "@/lib/device/dosing";
 import { ALERT_REFERENCE } from "@/lib/device/alerts";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/Button";
@@ -29,12 +30,6 @@ export const Route = createFileRoute("/settings")({
 });
 
 const TANK_VOLUME_OPTIONS_L = [500, 1000, 1500, 2000, 3000, 5000];
-
-// Electrode hardware current cap. Used only to show a reference "max
-// deliverable charge this cycle" figure next to the Normal/High charge
-// fields (coulombs = amps × seconds) — it does not change what the app
-// sends to the device, it's just informational context for tuning.
-const MAX_CURRENT_CAP_A = 3;
 
 function SettingsScreen() {
   const devices = useDevices();
@@ -132,8 +127,9 @@ function SettingsScreen() {
       <section className="space-y-3 rounded-card bg-surface p-4">
         <p className="text-sm text-muted">Chlorination charge levels</p>
         <p className="text-xs text-muted">
-          Sets how much charge (coulombs) the device delivers per cycle for the Normal and High
-          chlorination modes on the Home screen. More charge produces more chlorine.
+          Sets how much charge the device delivers per cycle for the Normal and High chlorination
+          modes on the Home screen, as a percentage of the theoretical max charge deliverable in
+          one cycle. More charge produces more chlorine.
         </p>
         <CycleLengthField
           value={config?.cycle_s}
@@ -143,19 +139,20 @@ function SettingsScreen() {
         <p className="text-xs text-muted">
           Theoretical max charge this cycle at the {MAX_CURRENT_CAP_A}A electrode current cap:{" "}
           <span className="font-medium text-content">
-            {config?.cycle_s ? MAX_CURRENT_CAP_A * config.cycle_s : "—"} C
-          </span>{" "}
-          — use this as an upper reference when choosing the Normal/High values below.
+            {config?.cycle_s ? theoreticalMaxChargeC(config.cycle_s) : "—"} C
+          </span>
         </p>
-        <ChargeLevelField
+        <PercentChargeField
           label="Normal"
-          value={chlorinationLevels.normalChargeC}
-          onCommit={(v) => setChlorinationLevels({ ...chlorinationLevels, normalChargeC: v })}
+          percent={chlorinationLevels.normalPct}
+          cycleSeconds={config?.cycle_s}
+          onCommit={(v) => setChlorinationLevels({ ...chlorinationLevels, normalPct: v })}
         />
-        <ChargeLevelField
+        <PercentChargeField
           label="High"
-          value={chlorinationLevels.highChargeC}
-          onCommit={(v) => setChlorinationLevels({ ...chlorinationLevels, highChargeC: v })}
+          percent={chlorinationLevels.highPct}
+          cycleSeconds={config?.cycle_s}
+          onCommit={(v) => setChlorinationLevels({ ...chlorinationLevels, highPct: v })}
         />
       </section>
 
@@ -211,16 +208,19 @@ function SettingsScreen() {
   );
 }
 
-function ChargeLevelField({
+function PercentChargeField({
   label,
-  value,
+  percent,
+  cycleSeconds,
   onCommit,
 }: {
   label: string;
-  value: number;
-  onCommit: (value: number) => void;
+  percent: number;
+  cycleSeconds: number | undefined;
+  onCommit: (percent: number) => void;
 }) {
-  const [text, setText] = useState(String(value));
+  const [text, setText] = useState(String(percent));
+  const referenceC = cycleSeconds ? Math.round((percent / 100) * theoreticalMaxChargeC(cycleSeconds)) : null;
 
   return (
     <div className="flex items-center justify-between gap-3">
@@ -230,18 +230,19 @@ function ChargeLevelField({
           type="number"
           inputMode="numeric"
           min={1}
+          max={100}
           step={1}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onBlur={() => {
             const parsed = Math.round(Number(text));
-            const next = Number.isFinite(parsed) && parsed >= 1 ? parsed : value;
+            const next = Number.isFinite(parsed) && parsed >= 1 && parsed <= 100 ? parsed : percent;
             setText(String(next));
-            if (next !== value) onCommit(next);
+            if (next !== percent) onCommit(next);
           }}
-          className="w-24 rounded-card border border-border bg-surface-muted px-3 py-2 text-right text-content"
+          className="w-20 rounded-card border border-border bg-surface-muted px-3 py-2 text-right text-content"
         />
-        <span className="text-xs text-muted">C</span>
+        <span className="text-xs text-muted">% ({referenceC ?? "—"} C)</span>
       </div>
     </div>
   );

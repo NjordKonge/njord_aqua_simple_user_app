@@ -6,7 +6,7 @@
  * needs a new concept, add it to this layer rather than reaching into the
  * store — that keeps the product language in one reviewable place.
  */
-import { useDevice, useConfig, useSonar } from "./store";
+import { useDevice, useConfig, useSonar, DEFAULT_CONFIG } from "./store";
 import { summarizeStatus, type StatusSummary } from "./status";
 import { summarizeHealth, type HealthSummary } from "./health";
 import { summarizeProgress, type ProgressSummary } from "./progress";
@@ -28,6 +28,17 @@ export interface DeviceSummary {
   /** Current electrode power draw, watts. Null while offline. */
   watts: number | null;
   dosingMode: DosingMode;
+  /** Configured cycle length (s), from the device's live config when known,
+   *  else the same default the device itself boots with. Needed to turn a
+   *  Normal/High percentage into an absolute `cycle_c` target — see
+   *  lib/device/dosing.ts. */
+  cycleSeconds: number;
+  /** Real-time "is the electrode actively driven right now" flag, straight
+   *  from LiveStatus.elec_on (`eon`) — NOT derived from dosingMode/config.
+   *  elec_on can be false even while chlorination is enabled (elec_en=1)
+   *  during a cycle's REST phase, so this is the correct source for a
+   *  physical-LED-style live indicator. False while offline. */
+  electrolysisOn: boolean;
   /** What the user is allowed to do right now. */
   actions: {
     canStart: boolean;
@@ -73,6 +84,8 @@ export function useDeviceSummary(deviceId: string | undefined): DeviceSummary {
     tank,
     watts,
     dosingMode,
+    cycleSeconds: config?.cycle_s ?? DEFAULT_CONFIG.cycle_s,
+    electrolysisOn: online && elecOn,
     actions: {
       canStart: online && !elecOn && !hasFault,
       canStop: online && elecOn,
