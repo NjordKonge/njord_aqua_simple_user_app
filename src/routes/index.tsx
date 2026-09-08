@@ -144,46 +144,44 @@ function HomeScreen() {
         onInfo={() => setInfoOpen(true)}
       />
 
-      <div className="grid grid-cols-[1fr_1.5fr] gap-4">
-        <div className="space-y-4">
-          <Metric icon={Thermometer} label="Water temperature" value={
-            health?.temperature.available ? `${health.temperature.celsius}°C` : "—"
-          } />
-          <Metric icon={Zap} label="Current watt" value={watts !== null ? `${watts.toFixed(0)} W` : "—"} />
-          <Metric icon={Droplets} label="Water used today" value="Not available" muted />
+      {/* Tank gets its own full-width card with a generous fixed height —
+          sharing a row with the 3 metric cards capped it to ~60% of the
+          screen width and whatever height the metrics stack happened to be,
+          which was never "large". A dedicated section lets it be as big as
+          the screen reasonably allows. */}
+      <div className="surface-lift flex flex-col items-center rounded-card border border-border-soft bg-surface p-4">
+        <div className="h-72 w-full">
+          <TankGraphic
+            percent={tank.percent}
+            liters={tank.liters}
+            capacityLiters={tank.capacityLiters}
+            low={tank.low}
+            hasReading={tank.hasReading}
+          />
         </div>
-
-        <div className="surface-lift flex flex-col items-center rounded-card border border-border-soft bg-surface p-4">
-          {/* This wrapper is what actually stretches to consume the card's
-              full available height (the grid row is already stretched to
-              match the metrics column) — TankGraphic grows its own image
-              area to fill it, rather than being centered as a smaller fixed
-              block with wasted space above/below. */}
-          <div className="min-h-0 w-full flex-1">
-            <TankGraphic
-              percent={tank.percent}
-              liters={tank.liters}
-              capacityLiters={tank.capacityLiters}
-              low={tank.low}
-              hasReading={tank.hasReading}
-            />
-          </div>
-          <p className="mt-3 shrink-0 text-sm font-semibold">{name}</p>
+        <p className="mt-3 shrink-0 text-sm font-semibold">{name}</p>
+        <span
+          className={cn(
+            "mt-1 inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[0.6875rem] font-medium",
+            device.online ? "bg-good/12 text-good" : "bg-bad/12 text-bad",
+          )}
+        >
           <span
             className={cn(
-              "mt-1 inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[0.6875rem] font-medium",
-              device.online ? "bg-good/12 text-good" : "bg-bad/12 text-bad",
+              "h-1.5 w-1.5 rounded-full",
+              device.online ? "animate-breathe bg-good" : "bg-bad",
             )}
-          >
-            <span
-              className={cn(
-                "h-1.5 w-1.5 rounded-full",
-                device.online ? "animate-breathe bg-good" : "bg-bad",
-              )}
-            />
-            {device.online ? "Connected" : "Not connected"}
-          </span>
-        </div>
+          />
+          {device.online ? "Connected" : "Not connected"}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <Metric icon={Thermometer} label="Water temp" value={
+          health?.temperature.available ? `${health.temperature.celsius}°C` : "—"
+        } />
+        <Metric icon={Zap} label="Watts" value={watts !== null ? `${watts.toFixed(0)} W` : "—"} />
+        <Metric icon={Droplets} label="Water used" value="N/A" muted />
       </div>
 
       <div className="flex items-center justify-between">
