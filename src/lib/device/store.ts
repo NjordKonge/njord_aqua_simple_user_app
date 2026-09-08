@@ -165,6 +165,17 @@ function parseKeyedCsv(text: string): Map<string, string> {
   return m;
 }
 
+// BuildLiveStatusCsv() (njord_gatt.cpp) writes `st=%s` from
+// AppSM_GetStateStr() (AppStateMachine.cpp), which returns the abbreviated
+// "ELEC" for the active state (BOOT/IDLE/ERROR are spelled out in full) —
+// not "ELECTROLYSIS_ACTIVE", which is what the rest of this app (and the
+// DeviceStateName type) expects. Every `status.state === "ELECTROLYSIS_ACTIVE"`
+// check (cycleRing.ts, progress.ts) was silently always false, e.g. the cycle
+// ring's timer/percentage looked permanently frozen even while a cycle was
+// genuinely running. Normalize on the way in so the rest of the app can keep
+// using the readable full name.
+const STATE_ALIASES: Record<string, string> = { ELEC: "ELECTROLYSIS_ACTIVE" };
+
 /** API v2.6+ keyed LiveStatus parser. Key legend matches firmware
  *  BuildLiveStatusCsv() in njord_gatt.cpp (see BLE Developer Guide §6). */
 function parseLiveStatusKeyed(text: string): LiveStatus | null {
@@ -179,8 +190,9 @@ function parseLiveStatusKeyed(text: string): LiveStatus | null {
   const bool = (k: string) => kv.get(k) === "1";
   const supplyMv = num("umv");
   const cruiseDutyPm = num("dpm");
+  const rawState = kv.get("st") ?? "";
   return {
-    state:      kv.get("st") ?? "",
+    state:      STATE_ALIASES[rawState] ?? rawState,
     fault:      kv.get("flt") ?? "NONE",
     elec_on:    bool("eon"),
     elec_ma:    num("ema"),
