@@ -8,27 +8,31 @@ export function ListRow({
   value,
   onClick,
   chevron = true,
+  disabled = false,
   className,
 }: {
   label: string;
   value?: ReactNode;
   onClick?: () => void;
   chevron?: boolean;
+  disabled?: boolean;
   className?: string;
 }) {
-  const Comp = onClick ? "button" : "div";
+  const clickable = Boolean(onClick) && !disabled;
+  const Comp = clickable ? "button" : "div";
   return (
     <Comp
-      onClick={onClick}
+      onClick={clickable ? onClick : undefined}
       className={cn(
         "flex w-full items-center justify-between gap-3 bg-surface-muted px-4 py-3.5 text-left first:rounded-t-card last:rounded-b-card",
+        disabled && "opacity-50",
         className,
       )}
     >
       <span className="text-content">{label}</span>
       <span className="flex items-center gap-2 text-muted">
         {value}
-        {chevron && onClick ? <ChevronRight size={18} /> : null}
+        {chevron && clickable ? <ChevronRight size={18} /> : null}
       </span>
     </Comp>
   );

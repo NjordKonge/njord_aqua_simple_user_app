@@ -1,32 +1,48 @@
 /**
- * Dosing mode — maps the spec's two-preset toggle onto the real firmware
- * config field `target_cl_mg_l` ("Target chloride (mg/L)", see
- * BLE_DEVELOPER_GUIDE.md §7). Both presets are written via the same
- * `updateConfig` / SETCFG path the technical app already uses; no new
- * commands are introduced.
+ * Chlorination mode — Off / Normal / High.
  *
- * Spec ranges:
- *   Standard safe:     0.5–1 mg/L  -> written as 0.75 mg/L (midpoint)
- *   Extra high dose:   1–3 mg/L    -> written as 2 mg/L    (midpoint)
+ * "Off" reuses the exact same STOP/START commands the Home screen's
+ * Start/Stop buttons already send (`stop_treatment` / `start_treatment`).
+ * On the firmware, both `AppSM_StartElectrolysis()` and
+ * `AppSM_StopElectrolysis()` simply flip the persisted `elec_en`
+ * (`electrolysisEnabled`) config flag and drive the state machine
+ * (AppStateMachine.cpp) — writing `elec_en` directly via SETCFG instead
+ * would bypass that state-machine transition, so this deliberately issues
+ * the same START/STOP commands the technical app uses rather than inventing
+ * a new mechanism.
+ *
+ * "Normal" and "High" both mean "electrolysis on" — they differ only in how
+ * much charge is targeted per cycle, via the existing `cycle_c` config field
+ * (`cyc`, firmware `cycleCoulombsTarget` — "target coulombs per cycle",
+ * BLE_DEVELOPER_GUIDE.md §7). More delivered charge generates more chlorine
+ * (via the firmware's own `gen_mg_per_c` conversion), so a higher charge
+ * target means a higher resulting chlorine concentration — but the app
+ * targets a *charge level* for these two modes, not a chlorine
+ * concentration directly, matching how the technical app's `cycle_c`
+ * control works. The actual Normal/High coulomb values are configurable in
+ * Settings (see lib/settings/chlorinationSettings.ts) since the right
+ * charge for a given electrode/tank is an installation-specific tuning
+ * value, not a firmware constant.
  */
 import type { NjordConfig } from "./types";
-import { updateConfig } from "./store";
+import { updateConfig, sendCommand } from "./store";
+import { getChlorinationLevels } from "@/lib/settings/chlorinationSettings";
 
-export type DosingMode = "standard_safe" | "extra_high_dose";
-
-export const DOSING_TARGET_CL_MG_L: Record<DosingMode, number> = {
-  standard_safe: 0.75,
-  extra_high_dose: 2,
-};
-
-/** Boundary between the two spec ranges (1 mg/L belongs to "extra high"). */
-const MODE_BOUNDARY_MG_L = 1;
+export type DosingMode = "off" | "normal" | "high";
 
 export function dosingModeFromConfig(config: NjordConfig | undefined): DosingMode {
-  if (!config) return "standard_safe";
-  return config.target_cl_mg_l >= MODE_BOUNDARY_MG_L ? "extra_high_dose" : "standard_safe";
+  if (!config || !config.elec_en) return "off";
+  const { normalChargeC, highChargeC } = getChlorinationLevels();
+  const distNormal = Math.abs(config.cycle_c - normalChargeC);
+  const distHigh = Math.abs(config.cycle_c - highChargeC);
+  return distHigh < distNormal ? "high" : "normal";
 }
 
 export function setDosingMode(deviceId: string, mode: DosingMode) {
-  return updateConfig(deviceId, { target_cl_mg_l: DOSING_TARGET_CL_MG_L[mode] });
+  if (mode === "off") {
+    return sendCommand(deviceId, "stop_treatment");
+  }
+  const { normalChargeC, highChargeC } = getChlorinationLevels();
+  updateConfig(deviceId, { cycle_c: mode === "high" ? highChargeC : normalChargeC });
+  return sendCommand(deviceId, "start_treatment");
 }

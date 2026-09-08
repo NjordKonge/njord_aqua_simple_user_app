@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Settings as SettingsIcon, Thermometer, Zap, Droplets } from "lucide-react";
+import { Settings as SettingsIcon, Thermometer, Zap, Droplets, HelpCircle } from "lucide-react";
 import { useDevices } from "@/lib/device/store";
 import { useDeviceSummary } from "@/lib/device/useDeviceSummary";
 import { startTreatment, stopTreatment, clearFault, pairDevice } from "@/lib/device/actions";
@@ -31,6 +31,7 @@ function HomeScreen() {
   const { device, name, status, waterStatus, health, watts, tank, dosingMode, actions, attention } =
     summary;
   const [infoOpen, setInfoOpen] = useState(false);
+  const [modeInfoOpen, setModeInfoOpen] = useState(false);
 
   useEffect(() => {
     if (!device?.online) return;
@@ -94,6 +95,12 @@ function HomeScreen() {
         </div>
       </div>
 
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted">Chlorination mode</p>
+        <button aria-label="More information" onClick={() => setModeInfoOpen(true)} className="text-muted">
+          <HelpCircle size={18} />
+        </button>
+      </div>
       <DosingModeToggle
         mode={dosingMode}
         onChange={(mode) => setDosingMode(device.id, mode)}
@@ -129,6 +136,26 @@ function HomeScreen() {
       <InfoSheet open={infoOpen} onClose={() => setInfoOpen(false)} title={waterStatus.label}>
         <p className="text-muted">{waterStatus.message}</p>
         {status.detail ? <p className="mt-2 text-muted">{status.detail}</p> : null}
+      </InfoSheet>
+
+      <InfoSheet open={modeInfoOpen} onClose={() => setModeInfoOpen(false)} title="Chlorination mode">
+        <div className="space-y-3 text-muted">
+          <p>
+            <span className="font-medium text-content">Off</span> — stops chlorination. The device
+            stays connected but does not run electrolysis.
+          </p>
+          <p>
+            <span className="font-medium text-content">Normal</span> and{" "}
+            <span className="font-medium text-content">High</span> both run chlorination — they
+            differ only in how much charge the device delivers per cycle. Delivering more charge
+            produces more chlorine, so High results in a higher chlorine concentration than
+            Normal.
+          </p>
+          <p>
+            The exact charge level each mode targets can be tuned in Settings to match this
+            installation.
+          </p>
+        </div>
       </InfoSheet>
     </div>
   );
@@ -166,11 +193,12 @@ function DosingModeToggle({
   onChange: (mode: DosingMode) => void;
 }) {
   const options: Array<{ value: DosingMode; label: string }> = [
-    { value: "standard_safe", label: "Standard safe" },
-    { value: "extra_high_dose", label: "Extra high dose" },
+    { value: "off", label: "Off" },
+    { value: "normal", label: "Normal" },
+    { value: "high", label: "High" },
   ];
   return (
-    <div className="grid grid-cols-2 gap-2 rounded-card bg-surface-muted p-1">
+    <div className="grid grid-cols-3 gap-2 rounded-card bg-surface-muted p-1">
       {options.map((opt) => (
         <button
           key={opt.value}

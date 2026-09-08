@@ -26,6 +26,7 @@
     "tailwindcss": "^4.2.1"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.3.4",
     "@tanstack/router-plugin": "^1.167.28",
     "@types/node": "^22.16.5",

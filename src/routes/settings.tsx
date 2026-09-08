@@ -16,6 +16,7 @@ import {
   PRECHLORINATION_STEP_MG_L,
 } from "@/lib/device/prechlorination";
 import { useTankModel, setTankModel, TANK_MODEL_LABEL, type TankModel } from "@/lib/settings/tankSettings";
+import { useChlorinationLevels, setChlorinationLevels } from "@/lib/settings/chlorinationSettings";
 import { ALERT_REFERENCE } from "@/lib/device/alerts";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/Button";
@@ -35,6 +36,7 @@ function SettingsScreen() {
   const config = useConfig(device?.id);
 
   const tankModel = useTankModel();
+  const chlorinationLevels = useChlorinationLevels();
   const [tankModelOpen, setTankModelOpen] = useState(false);
   const [tankVolumeOpen, setTankVolumeOpen] = useState(false);
   const [waterSourceOpen, setWaterSourceOpen] = useState(false);
@@ -80,7 +82,8 @@ function SettingsScreen() {
           <ListRow
             label="Tank volume"
             value={config ? `${config.tank_l}L` : "—"}
-            onClick={() => device && setTankVolumeOpen(true)}
+            onClick={() => setTankVolumeOpen(true)}
+            disabled={!device?.online}
           />
         </div>
       </section>
@@ -92,7 +95,8 @@ function SettingsScreen() {
           <ListRow
             label="Source type"
             value={waterSource ? WATER_SOURCE_LABEL[waterSource] : "Not set"}
-            onClick={() => device && setWaterSourceOpen(true)}
+            onClick={() => setWaterSourceOpen(true)}
+            disabled={!device?.online}
           />
         </div>
       </section>
@@ -109,9 +113,31 @@ function SettingsScreen() {
           max={PRECHLORINATION_MAX_MG_L}
           step={PRECHLORINATION_STEP_MG_L}
           value={prechlorination}
-          disabled={!device}
-          onChange={(e) => device && setPrechlorination(device.id, Number(e.target.value))}
-          className="w-full accent-[var(--color-brand)]"
+          disabled={!device?.online}
+          onChange={(e) => device?.online && setPrechlorination(device.id, Number(e.target.value))}
+          className="w-full accent-[var(--color-brand)] disabled:opacity-50"
+        />
+        {!device?.online ? (
+          <p className="mt-2 text-xs text-muted">Connect to the device to change this setting.</p>
+        ) : null}
+      </section>
+
+      {/* Chlorination charge levels */}
+      <section className="space-y-3 rounded-card bg-surface p-4">
+        <p className="text-sm text-muted">Chlorination charge levels</p>
+        <p className="text-xs text-muted">
+          Sets how much charge (coulombs) the device delivers per cycle for the Normal and High
+          chlorination modes on the Home screen. More charge produces more chlorine.
+        </p>
+        <ChargeLevelField
+          label="Normal"
+          value={chlorinationLevels.normalChargeC}
+          onCommit={(v) => setChlorinationLevels({ ...chlorinationLevels, normalChargeC: v })}
+        />
+        <ChargeLevelField
+          label="High"
+          value={chlorinationLevels.highChargeC}
+          onCommit={(v) => setChlorinationLevels({ ...chlorinationLevels, highChargeC: v })}
         />
       </section>
 
@@ -138,7 +164,7 @@ function SettingsScreen() {
         title="Tank volume"
         value={config?.tank_l ?? null}
         options={TANK_VOLUME_OPTIONS_L.map((l) => ({ value: l, label: `${l}L` }))}
-        onSelect={(l) => device && updateConfig(device.id, { tank_l: l })}
+        onSelect={(l) => device?.online && updateConfig(device.id, { tank_l: l })}
       />
 
       <PickerSheet<WaterSource>
@@ -150,7 +176,7 @@ function SettingsScreen() {
           value: s,
           label: WATER_SOURCE_LABEL[s],
         }))}
-        onSelect={(s) => device && setWaterSource(device.id, s)}
+        onSelect={(s) => device?.online && setWaterSource(device.id, s)}
       />
 
       <InfoSheet open={alertInfoOpen} onClose={() => setAlertInfoOpen(false)} title="Alert information">
@@ -163,6 +189,42 @@ function SettingsScreen() {
           ))}
         </div>
       </InfoSheet>
+    </div>
+  );
+}
+
+function ChargeLevelField({
+  label,
+  value,
+  onCommit,
+}: {
+  label: string;
+  value: number;
+  onCommit: (value: number) => void;
+}) {
+  const [text, setText] = useState(String(value));
+
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <label className="text-sm">{label}</label>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          inputMode="numeric"
+          min={1}
+          step={1}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={() => {
+            const parsed = Math.round(Number(text));
+            const next = Number.isFinite(parsed) && parsed >= 1 ? parsed : value;
+            setText(String(next));
+            if (next !== value) onCommit(next);
+          }}
+          className="w-24 rounded-card border border-border bg-surface-muted px-3 py-2 text-right text-content"
+        />
+        <span className="text-xs text-muted">C</span>
+      </div>
     </div>
   );
 }
