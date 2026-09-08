@@ -33,6 +33,12 @@ export interface DeviceSummary {
    *  Normal/High percentage into an absolute `cycle_c` target — see
    *  lib/device/dosing.ts. */
   cycleSeconds: number;
+  /** The current-controller's real target current (mA) — `target_ma`/`tma`,
+   *  firmware `electrolysisTargetCurrentmA`. This is the actual setpoint the
+   *  fixed-step PWM controller (AppStateMachine.cpp) drives the H-bridge
+   *  duty toward, not an assumed constant — used for the Normal/High charge
+   *  percentage math and the adjustable current field in Settings. */
+  targetMa: number;
   /** Real-time "is the electrode actively driven right now" flag, straight
    *  from LiveStatus.elec_on (`eon`) — NOT derived from dosingMode/config.
    *  elec_on can be false even while chlorination is enabled (elec_en=1)
@@ -85,6 +91,7 @@ export function useDeviceSummary(deviceId: string | undefined): DeviceSummary {
     watts,
     dosingMode,
     cycleSeconds: config?.cycle_s ?? DEFAULT_CONFIG.cycle_s,
+    targetMa: config?.target_ma ?? DEFAULT_CONFIG.target_ma,
     electrolysisOn: online && elecOn,
     actions: {
       canStart: online && !elecOn && !hasFault,

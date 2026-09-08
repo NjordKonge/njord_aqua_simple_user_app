@@ -1663,6 +1663,17 @@ class Store {
         if (cmd === "get_status") this.refreshStatus(deviceId).catch(() => {});
         if (cmd === "get_config") this.refreshConfig(deviceId).catch(() => {});
         if (cmd === "set_config") this.refreshConfig(deviceId).catch(() => {});
+        // START/STOP (AppSM_StartElectrolysis/AppSM_StopElectrolysis) flip the
+        // persisted `electrolysisEnabled` flag directly on the device — they
+        // don't go through SETCFG — so without this our local `config.elec_en`
+        // (and everything derived from it, e.g. dosingMode) would never learn
+        // about the change until some unrelated GETCFG happened to run. That
+        // let the Home screen's optimistic "pendingMode" mask the stale value
+        // while mounted, but the real (never-updated) mode would reappear the
+        // moment the screen remounted (e.g. after visiting Overview and back)
+        // — looking exactly like "the mode switched itself back on".
+        if (cmd === "start_treatment") this.refreshConfig(deviceId).catch(() => {});
+        if (cmd === "stop_treatment") this.refreshConfig(deviceId).catch(() => {});
         if (cmd === "set_name") {
           // SETNAME only ACKs; re-read Config to pick up the new nm= suffix.
           // Also reflect the new advertised name locally for instant feedback

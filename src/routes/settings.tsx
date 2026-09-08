@@ -17,7 +17,11 @@ import {
 } from "@/lib/device/prechlorination";
 import { useTankModel, setTankModel, TANK_MODEL_LABEL, type TankModel } from "@/lib/settings/tankSettings";
 import { useChlorinationLevels, setChlorinationLevels } from "@/lib/settings/chlorinationSettings";
-import { MAX_CURRENT_CAP_A, theoreticalMaxChargeC } from "@/lib/device/dosing";
+import {
+  theoreticalMaxChargeC,
+  TARGET_CURRENT_MIN_MA,
+  TARGET_CURRENT_MAX_MA,
+} from "@/lib/device/dosing";
 import { ALERT_REFERENCE } from "@/lib/device/alerts";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/Button";
@@ -123,13 +127,29 @@ function SettingsScreen() {
         ) : null}
       </section>
 
+      {/* Electrode current */}
+      <section className="space-y-3 rounded-card bg-surface p-4">
+        <p className="text-sm text-muted">Electrode current</p>
+        <p className="text-xs text-muted">
+          The device drives the electrode with a PWM current controller (see AppStateMachine.cpp)
+          that continuously adjusts the H-bridge duty cycle to track this target current — it is
+          not a fixed duty, it actively measures and corrects toward this exact setpoint every
+          100 ms. Capped here at 3A for safety headroom below the device's overcurrent fault.
+        </p>
+        <TargetCurrentField
+          value={config?.target_ma}
+          disabled={!device?.online}
+          onCommit={(v) => device?.online && updateConfig(device.id, { target_ma: v })}
+        />
+      </section>
+
       {/* Chlorination charge levels */}
       <section className="space-y-3 rounded-card bg-surface p-4">
         <p className="text-sm text-muted">Chlorination charge levels</p>
         <p className="text-xs text-muted">
           Sets how much charge the device delivers per cycle for the Normal and High chlorination
           modes on the Home screen, as a percentage of the theoretical max charge deliverable in
-          one cycle. More charge produces more chlorine.
+          one cycle at the electrode current above. More charge produces more chlorine.
         </p>
         <CycleLengthField
           value={config?.cycle_s}
@@ -137,21 +157,26 @@ function SettingsScreen() {
           onCommit={(v) => device?.online && updateConfig(device.id, { cycle_s: v })}
         />
         <p className="text-xs text-muted">
-          Theoretical max charge this cycle at the {MAX_CURRENT_CAP_A}A electrode current cap:{" "}
+          Theoretical max charge this cycle at {config?.target_ma ? config.target_ma / 1000 : "—"}A:{" "}
           <span className="font-medium text-content">
-            {config?.cycle_s ? theoreticalMaxChargeC(config.cycle_s) : "—"} C
+            {config?.cycle_s && config?.target_ma
+              ? theoreticalMaxChargeC(config.cycle_s, config.target_ma)
+              : "—"}{" "}
+            C
           </span>
         </p>
         <PercentChargeField
           label="Normal"
           percent={chlorinationLevels.normalPct}
           cycleSeconds={config?.cycle_s}
+          targetMa={config?.target_ma}
           onCommit={(v) => setChlorinationLevels({ ...chlorinationLevels, normalPct: v })}
         />
         <PercentChargeField
           label="High"
           percent={chlorinationLevels.highPct}
           cycleSeconds={config?.cycle_s}
+          targetMa={config?.target_ma}
           onCommit={(v) => setChlorinationLevels({ ...chlorinationLevels, highPct: v })}
         />
       </section>
@@ -212,15 +237,20 @@ function PercentChargeField({
   label,
   percent,
   cycleSeconds,
+  targetMa,
   onCommit,
 }: {
   label: string;
   percent: number;
   cycleSeconds: number | undefined;
+  targetMa: number | undefined;
   onCommit: (percent: number) => void;
 }) {
   const [text, setText] = useState(String(percent));
-  const referenceC = cycleSeconds ? Math.round((percent / 100) * theoreticalMaxChargeC(cycleSeconds)) : null;
+  const referenceC =
+    cycleSeconds && targetMa
+      ? Math.round((percent / 100) * theoreticalMaxChargeC(cycleSeconds, targetMa))
+      : null;
 
   return (
     <div className="flex items-center justify-between gap-3">
@@ -294,3 +324,51 @@ function CycleLengthField({
   );
 }
 
+function TargetCurrentField({
+  value,
+  disabled,
+  onCommit,
+}: {
+  value: number | undefined;
+  disabled: boolean;
+  onCommit: (value: number) => void;
+}) {
+  const [text, setText] = useState(value != null ? String(value) : "");
+
+  // `value` comes from the live device config, so it can change out from
+  // under us (initial load after connecting, or once our own SETCFG
+  // round-trips back) — same reasoning as CycleLengthField.
+  useEffect(() => {
+    setText(value != null ? String(value) : "");
+  }, [value]);
+
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <label className="text-sm">Target current</label>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          inputMode="numeric"
+          min={TARGET_CURRENT_MIN_MA}
+          max={TARGET_CURRENT_MAX_MA}
+          step={50}
+          value={text}
+          disabled={disabled}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={() => {
+            const parsed = Math.round(Number(text));
+            const fallback = value ?? 0;
+            const next =
+              Number.isFinite(parsed) && parsed >= TARGET_CURRENT_MIN_MA && parsed <= TARGET_CURRENT_MAX_MA
+                ? parsed
+                : fallback;
+            setText(String(next));
+            if (next !== value) onCommit(next);
+          }}
+          className="w-24 rounded-card border border-border bg-surface-muted px-3 py-2 text-right text-content disabled:opacity-50"
+        />
+        <span className="text-xs text-muted">mA (max {TARGET_CURRENT_MAX_MA / 1000}A)</span>
+      </div>
+    </div>
+  );
+}

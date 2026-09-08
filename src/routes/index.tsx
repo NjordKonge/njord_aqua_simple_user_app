@@ -31,7 +31,7 @@ function HomeScreen() {
   const deviceId = devices[0]?.id;
   const summary = useDeviceSummary(deviceId);
   const {
-    device, name, status, waterStatus, health, watts, tank, dosingMode, cycleSeconds,
+    device, name, status, waterStatus, health, watts, tank, dosingMode, cycleSeconds, targetMa,
     electrolysisOn, actions, attention,
   } = summary;
   const [infoOpen, setInfoOpen] = useState(false);
@@ -148,7 +148,7 @@ function HomeScreen() {
         onChange={(mode) => {
           setPendingMode(mode);
           playModeChangeFeedback(mode);
-          pendingEntryRef.current = setDosingMode(device.id, mode, cycleSeconds);
+          pendingEntryRef.current = setDosingMode(device.id, mode, cycleSeconds, targetMa);
         }}
       />
 
