@@ -1,5 +1,7 @@
 import { createRootRoute, Outlet, useRouterState } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { BottomTabBar } from "@/components/layout/BottomTabBar";
+import { cn } from "@/lib/utils";
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -17,6 +19,7 @@ export const Route = createRootRoute({
  */
 function RootLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const [splashVisible, setSplashVisible] = useState(true);
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden">
@@ -28,6 +31,54 @@ function RootLayout() {
         <Outlet />
       </main>
       <BottomTabBar />
+      {splashVisible ? <SplashScreen onDone={() => setSplashVisible(false)} /> : null}
+    </div>
+  );
+}
+
+/**
+ * Cold-start splash: covers the app for a beat with the wordmark and tagline
+ * before fading out, so first launch feels like an arrival rather than a
+ * blank flash. Mounted once by RootLayout (which itself never remounts on
+ * navigation), so it never reappears after the first paint.
+ */
+function SplashScreen({ onDone }: { onDone: () => void }) {
+  const [leaving, setLeaving] = useState(false);
+
+  useEffect(() => {
+    const showTimer = setTimeout(() => setLeaving(true), 1300);
+    return () => clearTimeout(showTimer);
+  }, []);
+
+  useEffect(() => {
+    if (!leaving) return;
+    const doneTimer = setTimeout(onDone, 500);
+    return () => clearTimeout(doneTimer);
+  }, [leaving, onDone]);
+
+  return (
+    <div
+      className={cn(
+        "fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-bg transition-opacity duration-500 ease-[var(--ease-out-soft)]",
+        leaving ? "pointer-events-none opacity-0" : "opacity-100",
+      )}
+      aria-hidden={leaving}
+    >
+      <div className="app-ambient" aria-hidden />
+      <img
+        src="/njord-logo-white.png"
+        alt="Njord Aqua"
+        className="relative z-10 w-36 animate-rise"
+        style={{
+          filter: "drop-shadow(0 6px 28px color-mix(in oklab, var(--color-brand) 50%, transparent))",
+        }}
+      />
+      <p
+        className="relative z-10 animate-fade text-center text-[0.8125rem] font-medium tracking-[0.24em] text-faint"
+        style={{ animationDelay: "150ms", animationFillMode: "backwards" }}
+      >
+        Easier, Cleaner, Safer, More
+      </p>
     </div>
   );
 }

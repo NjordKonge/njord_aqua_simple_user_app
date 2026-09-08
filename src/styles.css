@@ -56,8 +56,9 @@
   --animate-breathe: breathe 2.6s ease-in-out infinite;
   --animate-shimmer: shimmer 2.4s linear infinite;
   --animate-pop: pop 0.34s var(--ease-spring) both;
-  /* Two wave layers at different speeds/directions; the interference between
-     them is what stops the tank surface looking like a single looping GIF. */
+  /* Unused by any component right now (TankGraphic's water surface is the
+     masked PNG artwork's own shimmer sweep instead) — kept as reusable
+     building blocks for any future drifting-surface effect. */
   --animate-wave: wave 7s linear infinite;
   --animate-wave-slow: wave-slow 11s linear infinite;
 
@@ -91,8 +92,8 @@
     from { opacity: 0; transform: scale(0.86); }
     to   { opacity: 1; transform: scale(1); }
   }
-  /* Translate distance must equal one tile of the wave path in TankGraphic
-     (80 user units) so the loop is seamless. */
+  /* Translate distance must equal one tile of the wave path (80 user units)
+     so the loop is seamless, should this be reused for an SVG wave again. */
   @keyframes wave {
     from { transform: translateX(0); }
     to   { transform: translateX(-80px); }
