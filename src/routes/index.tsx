@@ -157,6 +157,7 @@ function HomeScreen() {
             capacityLiters={tank.capacityLiters}
             low={tank.low}
             hasReading={tank.hasReading}
+            electrolysisOn={electrolysisOn}
           />
         </div>
         <p className="mt-3 shrink-0 text-sm font-semibold">{name}</p>
@@ -180,7 +181,22 @@ function HomeScreen() {
         <Metric icon={Thermometer} label="Water temp" value={
           health?.temperature.available ? `${health.temperature.celsius}°C` : "—"
         } />
-        <Metric icon={Zap} label="Watts" value={watts !== null ? `${watts.toFixed(0)} W` : "—"} />
+        <Metric
+          icon={Zap}
+          label="Watts"
+          value={
+            watts === null
+              ? "—"
+              // Chlorination can be enabled while the electrode itself is
+              // idling through a cycle's REST phase (elec_on false) — that's
+              // a normal part of the dosing workflow, not a fault, but a
+              // flat "0 W" reads as broken/stuck. Say so explicitly instead.
+              : dosingMode !== "off" && !electrolysisOn
+                ? "Waiting\u2026"
+                : `${watts.toFixed(0)} W`
+          }
+          muted={watts !== null && dosingMode !== "off" && !electrolysisOn}
+        />
         <Metric icon={Droplets} label="Water used" value="N/A" muted />
       </div>
 
@@ -195,7 +211,7 @@ function HomeScreen() {
         </button>
       </div>
 
-      <ElectrolysisLed online={device.online} on={electrolysisOn} />
+      <StatusLeds online={device.online} chlorinationOn={dosingMode !== "off"} electrolysisOn={electrolysisOn} />
       <DosingModeToggle
         mode={displayedMode}
         onChange={(mode) => {
@@ -324,54 +340,100 @@ function Metric({
 }
 
 /**
- * Physical-LED-style indicator for whether the electrode is actively being
- * driven right now. Sourced straight from the device's live `elec_on`
- * status field (not from the app's dosingMode/config assumptions) so it
- * reflects reality even during a cycle's REST phase, faults, or offline.
+ * Two physical-LED-style rows in one bar:
+ *  - Chlorination: whether the device is CONFIGURED to run (dosingMode !==
+ *    "off"), independent of the electrode's instant-to-instant state.
+ *  - Electrolysis: the electrode's live `elec_on` state, sourced straight
+ *    from the device's status (not derived from dosingMode/config), so it
+ *    reflects reality even during a cycle's REST phase, faults, or offline.
+ *    This can be OFF while Chlorination is ON — a normal REST phase, not a
+ *    fault — shown as a steady blue "Waiting" rather than reusing the same
+ *    dead "Off" look, so a resting cycle never reads as something's wrong.
  *
- * When lit it genuinely emits: a breathing core, a static halo ring and a
- * faint wash across the row, so you can read "it's working" from across the
- * room without parsing the text.
+ * Only the "on" (green) state pulses — "Waiting" (blue) stays steady so the
+ * two remain visually distinct from across the room, not just by color.
  */
-function ElectrolysisLed({ online, on }: { online: boolean; on: boolean }) {
-  const lit = online && on;
+function StatusLeds({
+  online,
+  chlorinationOn,
+  electrolysisOn,
+}: {
+  online: boolean;
+  chlorinationOn: boolean;
+  electrolysisOn: boolean;
+}) {
+  const chlorinationLit = online && chlorinationOn;
+  const electrolysisLit = online && electrolysisOn;
+  const waiting = online && chlorinationOn && !electrolysisOn;
+
   return (
-    <div
-      className="surface-lift flex items-center gap-2.5 rounded-card border border-border-soft bg-surface px-4 py-3 transition-all duration-500"
-      style={
-        lit
-          ? {
-              backgroundImage:
-                "linear-gradient(100deg, color-mix(in srgb, var(--color-good) 12%, transparent), transparent 50%)",
-            }
-          : undefined
-      }
-    >
-      <span className="relative flex h-2.5 w-2.5 shrink-0 items-center justify-center">
+    <div className="surface-lift grid grid-cols-2 divide-x divide-border-soft rounded-card border border-border-soft bg-surface transition-all duration-500">
+      <div
+        className="flex items-center gap-2 px-3.5 py-3"
+        style={
+          chlorinationLit
+            ? { backgroundImage: "linear-gradient(100deg, color-mix(in srgb, var(--color-good) 12%, transparent), transparent 50%)" }
+            : undefined
+        }
+      >
+        <Led state={chlorinationLit ? "on" : "off"} />
+        <span className="text-[0.6875rem] font-medium uppercase tracking-wider text-muted">Chlorination</span>
         <span
           className={cn(
-            "h-2.5 w-2.5 rounded-full transition-colors duration-500",
-            lit ? "animate-breathe bg-good" : "bg-surface-raised",
+            "ml-auto text-[0.6875rem] font-semibold uppercase tracking-wider transition-colors duration-500",
+            chlorinationLit ? "text-good" : "text-faint",
           )}
-          style={
-            lit
-              ? { boxShadow: "0 0 0 3px color-mix(in srgb, var(--color-good) 18%, transparent), 0 0 14px var(--color-good)" }
+        >
+          {online ? (chlorinationOn ? "On" : "Off") : "—"}
+        </span>
+      </div>
+
+      <div
+        className="flex items-center gap-2 px-3.5 py-3"
+        style={
+          electrolysisLit
+            ? { backgroundImage: "linear-gradient(100deg, color-mix(in srgb, var(--color-good) 12%, transparent), transparent 50%)" }
+            : waiting
+              ? { backgroundImage: "linear-gradient(100deg, color-mix(in srgb, var(--color-brand) 12%, transparent), transparent 50%)" }
               : undefined
-          }
-        />
-      </span>
-      <span className="text-[0.6875rem] font-medium uppercase tracking-wider text-muted">
-        Electrolysis
-      </span>
+        }
+      >
+        <Led state={electrolysisLit ? "on" : waiting ? "waiting" : "off"} />
+        <span className="text-[0.6875rem] font-medium uppercase tracking-wider text-muted">Electrolysis</span>
+        <span
+          className={cn(
+            "ml-auto text-[0.6875rem] font-semibold uppercase tracking-wider transition-colors duration-500",
+            electrolysisLit ? "text-good" : waiting ? "text-brand" : "text-faint",
+          )}
+        >
+          {!online ? "—" : electrolysisLit ? "On" : waiting ? "Waiting" : "Off"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Single dot used by both StatusLeds rows — "on" breathes green, "waiting"
+ *  is a steady blue, "off" is a dead surface-colored dot. */
+function Led({ state }: { state: "on" | "waiting" | "off" }) {
+  return (
+    <span className="relative flex h-2.5 w-2.5 shrink-0 items-center justify-center">
       <span
         className={cn(
-          "ml-auto text-[0.6875rem] font-semibold uppercase tracking-wider transition-colors duration-500",
-          lit ? "text-good" : "text-faint",
+          "h-2.5 w-2.5 rounded-full transition-colors duration-500",
+          state === "on" && "animate-breathe bg-good",
+          state === "waiting" && "bg-brand",
+          state === "off" && "bg-surface-raised",
         )}
-      >
-        {online ? (on ? "On" : "Off") : "—"}
-      </span>
-    </div>
+        style={
+          state === "on"
+            ? { boxShadow: "0 0 0 3px color-mix(in srgb, var(--color-good) 18%, transparent), 0 0 14px var(--color-good)" }
+            : state === "waiting"
+              ? { boxShadow: "0 0 0 3px color-mix(in srgb, var(--color-brand) 18%, transparent), 0 0 10px var(--color-brand)" }
+              : undefined
+        }
+      />
+    </span>
   );
 }
 

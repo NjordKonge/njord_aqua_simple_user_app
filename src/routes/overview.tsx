@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Download, Loader2 } from "lucide-react";
 import { useDevices, useTelemetry, useSonarHistory } from "@/lib/device/store";
 import { useDeviceSummary } from "@/lib/device/useDeviceSummary";
 import { wattsFromTelemetry, voltsFromTelemetry } from "@/lib/device/power";
@@ -47,12 +47,18 @@ function OverviewScreen() {
   // Pulls the firmware's own flash-log history for the selected window, so
   // these charts show everything the device recorded — including while the
   // app was closed — not just this session's live rolling buffer (see
-  // lib/device/history.ts for why that buffer alone isn't enough).
-  const { entries: logEntries, loading: historyLoading } = useHistoryLog(
-    deviceId,
-    Boolean(device?.online),
-    range,
-  );
+  // lib/device/history.ts for why that buffer alone isn't enough). The
+  // automatic fetch is throttled, so `refresh()` is also wired to an
+  // explicit "Load history" button below — belt and braces for cases where
+  // the automatic fetch didn't happen to land (device only just reconnected,
+  // app resumed from background rather than a true cold start, etc.).
+  const {
+    entries: logEntries,
+    loading: historyLoading,
+    downloading: historyDownloading,
+    progressPct: historyProgressPct,
+    refresh: refreshHistory,
+  } = useHistoryLog(deviceId, Boolean(device?.online), range);
 
   const since = Date.now() - RANGE_WINDOW_MS[range];
   const rangeShort = RANGE_SHORT_LABEL[range];
@@ -108,15 +114,40 @@ function OverviewScreen() {
         <h1 className="text-2xl font-semibold">Overview</h1>
       </div>
 
-      <PillTabs
-        options={[
-          { value: "daily", label: "Daily" },
-          { value: "weekly", label: "Weekly" },
-          { value: "monthly", label: "Monthly" },
-        ]}
-        value={range}
-        onChange={setRange}
-      />
+      {/* -mx-5/px-5 bleeds to the screen edge so 5 pills have room to
+          overflow into a horizontal scroll on narrow phones instead of
+          clipping, while looking identical to before when they all fit. */}
+      <div className="-mx-5 overflow-x-auto px-5">
+        <PillTabs
+          options={[
+            { value: "1h", label: "1h" },
+            { value: "5h", label: "5h" },
+            { value: "daily", label: "24h" },
+            { value: "weekly", label: "7d" },
+            { value: "monthly", label: "30d" },
+          ]}
+          value={range}
+          onChange={setRange}
+        />
+      </div>
+
+      <button
+        onClick={refreshHistory}
+        disabled={!device?.online || historyDownloading}
+        className="press flex w-full items-center justify-center gap-2 rounded-card border border-border-soft bg-surface-muted py-2.5 text-sm font-medium text-muted transition-opacity disabled:opacity-60"
+      >
+        {historyDownloading ? (
+          <>
+            <Loader2 size={15} className="animate-spin" />
+            {historyProgressPct !== null ? `Loading history… ${historyProgressPct}%` : "Loading history…"}
+          </>
+        ) : (
+          <>
+            <Download size={15} />
+            Load history
+          </>
+        )}
+      </button>
 
       <section>
         <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Operation cycle</p>

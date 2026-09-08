@@ -22,9 +22,11 @@ import { NJORD_EPOCH_OFFSET } from "./types";
 import type { LogEntry, TelemetryLogEntry, TelemetrySample, SonarLogEntry } from "./types";
 import { sendCommand, useLogs, useLogProgress, type SonarSample } from "./store";
 
-export type HistoryRange = "daily" | "weekly" | "monthly";
+export type HistoryRange = "1h" | "5h" | "daily" | "weekly" | "monthly";
 
 export const RANGE_WINDOW_MS: Record<HistoryRange, number> = {
+  "1h": 60 * 60 * 1000,
+  "5h": 5 * 60 * 60 * 1000,
   daily: 24 * 60 * 60 * 1000,
   weekly: 7 * 24 * 60 * 60 * 1000,
   monthly: 30 * 24 * 60 * 60 * 1000,
@@ -32,6 +34,8 @@ export const RANGE_WINDOW_MS: Record<HistoryRange, number> = {
 
 /** Short form for section headings, e.g. "Water temperature — last 24h". */
 export const RANGE_SHORT_LABEL: Record<HistoryRange, string> = {
+  "1h": "1h",
+  "5h": "5h",
   daily: "24h",
   weekly: "7d",
   monthly: "30d",
@@ -81,10 +85,26 @@ function fromDeviceTs(ts: number): number {
 const lastRequestedAt = new Map<string, number>();
 const MIN_REFETCH_INTERVAL_MS = 60_000;
 
+function requestLogDownload(deviceId: string, range: HistoryRange) {
+  lastRequestedAt.set(`${deviceId}:${range}`, Date.now());
+  const now = Date.now();
+  sendCommand(deviceId, "start_log_download", {
+    from_ts: toDeviceTs(now - RANGE_WINDOW_MS[range]),
+    to_ts: toDeviceTs(now),
+  });
+}
+
 /**
  * Requests the firmware's flash log for `range` (throttled per
- * deviceId+range) and returns the parsed entries plus a `loading` flag for
- * the very first fetch.
+ * deviceId+range) and returns the parsed entries, a `loading` flag for the
+ * very first fetch, live download progress, and a `refresh()` escape hatch
+ * that bypasses the throttle — e.g. for an explicit "Load history" button,
+ * since the automatic fetch alone has turned out to not always be enough:
+ * if the device only just reconnected, or the app was merely resumed from
+ * the background (Capacitor can keep the WebView — and this module's
+ * throttle map — alive across a "restart" that isn't actually a fresh
+ * process), the 60s throttle can suppress the very fetch the user is
+ * waiting on, leaving charts showing only this session's live buffer.
  */
 export function useHistoryLog(deviceId: string | undefined, online: boolean, range: HistoryRange) {
   const entries = useLogs(deviceId);
@@ -95,16 +115,20 @@ export function useHistoryLog(deviceId: string | undefined, online: boolean, ran
     const key = `${deviceId}:${range}`;
     const last = lastRequestedAt.get(key) ?? 0;
     if (Date.now() - last < MIN_REFETCH_INTERVAL_MS) return;
-    lastRequestedAt.set(key, Date.now());
-    const now = Date.now();
-    sendCommand(deviceId, "start_log_download", {
-      from_ts: toDeviceTs(now - RANGE_WINDOW_MS[range]),
-      to_ts: toDeviceTs(now),
-    });
+    requestLogDownload(deviceId, range);
   }, [deviceId, online, range]);
 
-  const loading = entries.length === 0 && progress != null && progress.completedAt == null && !progress.cancelled;
-  return { entries, loading };
+  const downloading = progress != null && progress.completedAt == null && !progress.cancelled;
+  const loading = entries.length === 0 && downloading;
+  const progressPct =
+    downloading && progress.total > 0 ? Math.min(100, Math.round((progress.received / progress.total) * 100)) : null;
+
+  function refresh() {
+    if (!deviceId || !online) return;
+    requestLogDownload(deviceId, range);
+  }
+
+  return { entries, loading, downloading, progressPct, refresh };
 }
 
 /** Adapts a flash-log TEL row to the same shape the live rolling buffer
