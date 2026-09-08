@@ -1954,6 +1954,25 @@ export function sendCommand(deviceId: string, cmd: string, data?: unknown) {
 export function updateConfig(id: string, patch: Partial<NjordConfig>) {
   return store.updateConfig(id, patch);
 }
+
+/** Resolve once a command entry leaves "pending" (ok or error). Lets callers
+ *  chain dependent commands — e.g. STOP must actually be acked (and the
+ *  firmware's EnterIdle() transition given a moment to happen) before SETCFG
+ *  and START are sent — instead of firing writes back-to-back over BLE and
+ *  hoping the timing works out. Firing 3 writes with no gap between them was
+ *  intermittently racing/getting dropped, which showed up as needing to tap
+ *  the chlorination mode toggle twice before it actually took effect. */
+export function waitForCommand(entry: CommandEntry): Promise<CommandEntry> {
+  if (entry.status !== "pending") return Promise.resolve(entry);
+  return new Promise((resolve) => {
+    const unsub = store.subscribe(() => {
+      if (entry.status !== "pending") {
+        unsub();
+        resolve(entry);
+      }
+    });
+  });
+}
 export function pairDevice() { return store.pair(); }
 export function recoverPairingAfterResume() { store.recoverPairingAfterResume(); }
 export function reconnectDevice(id: string) { return store.reconnect(id); }

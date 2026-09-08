@@ -33,8 +33,8 @@
  * isn't actually being driven at. See lib/settings/chlorinationSettings.ts
  * for the stored percentages.
  */
-import type { NjordConfig } from "./types";
-import { updateConfig, sendCommand } from "./store";
+import type { CommandEntry, NjordConfig } from "./types";
+import { sendCommand, waitForCommand } from "./store";
 import { getChlorinationLevels } from "@/lib/settings/chlorinationSettings";
 
 export type DosingMode = "off" | "normal" | "high";
@@ -88,20 +88,45 @@ export function dosingModeFromConfig(config: NjordConfig | undefined): DosingMod
  * cycle. STOP (`AppSM_StopElectrolysis`) IS handled from the active state
  * (`UpdateElectrolysis` checks it every tick) and drops straight to IDLE, so
  * STOP → SETCFG → START reliably forces a fresh cycle (`EnterElectrolysis`)
- * at the newly-selected charge target every time the mode changes. */
-export function setDosingMode(
+ * at the newly-selected charge target every time the mode changes.
+ *
+ * Each step is sent only after the *previous* one has actually been ACKed
+ * (`waitForCommand`) rather than firing all 3 writes back-to-back. Sending
+ * SETCFG/START immediately after STOP — with no gap — raced the firmware's
+ * own STOP→IDLE transition (and just spammed 3 BLE writes faster than the
+ * link could reliably carry them); that intermittent race is what made the
+ * toggle sometimes need a second tap before it actually switched. If a step
+ * fails (device disconnected, NACK, ack timeout) the chain stops there
+ * instead of blindly sending the rest. `onEntry`, if given, is called with
+ * every intermediate command entry (not just the final one) so a caller
+ * tracking "is anything still pending" sees the failure immediately instead
+ * of only once the whole chain finishes. */
+export async function setDosingMode(
   deviceId: string,
   mode: DosingMode,
   cycleSeconds: number,
   targetMa: number,
-) {
+  onEntry?: (entry: CommandEntry) => void,
+): Promise<CommandEntry> {
+  const stop = sendCommand(deviceId, "stop_treatment");
+  onEntry?.(stop);
   if (mode === "off") {
-    return sendCommand(deviceId, "stop_treatment");
+    return waitForCommand(stop);
   }
-  sendCommand(deviceId, "stop_treatment");
+  const stopResult = await waitForCommand(stop);
+  if (stopResult.status === "error") return stopResult;
+
   const { normalPct, highPct } = getChlorinationLevels();
   const pct = mode === "high" ? highPct : normalPct;
-  updateConfig(deviceId, { cycle_c: chargeForPct(pct, cycleSeconds, targetMa) });
-  return sendCommand(deviceId, "start_treatment");
+  // cycle_c here is always within validateConfig's [1..4000] range (see
+  // chargeForPct's clamp), so no separate SETCFG validation is needed.
+  const setCfg = sendCommand(deviceId, "set_config", { cycle_c: chargeForPct(pct, cycleSeconds, targetMa) });
+  onEntry?.(setCfg);
+  const setCfgResult = await waitForCommand(setCfg);
+  if (setCfgResult.status === "error") return setCfgResult;
+
+  const start = sendCommand(deviceId, "start_treatment");
+  onEntry?.(start);
+  return waitForCommand(start);
 }
 

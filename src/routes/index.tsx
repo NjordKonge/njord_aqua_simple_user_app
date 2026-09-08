@@ -148,7 +148,14 @@ function HomeScreen() {
         onChange={(mode) => {
           setPendingMode(mode);
           playModeChangeFeedback(mode);
-          pendingEntryRef.current = setDosingMode(device.id, mode, cycleSeconds, targetMa);
+          // setDosingMode is async (STOP is awaited before SETCFG/START are
+          // sent, in series). onEntry reports each step's command entry as
+          // it's sent, so the ref always reflects the currently in-flight
+          // (or just-failed) command instead of only the last one.
+          pendingEntryRef.current = null;
+          void setDosingMode(device.id, mode, cycleSeconds, targetMa, (entry) => {
+            pendingEntryRef.current = entry;
+          });
         }}
       />
 

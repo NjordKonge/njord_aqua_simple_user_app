@@ -2,10 +2,12 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import { useDevices, useTelemetry, useSonarHistory } from "@/lib/device/store";
+import { useDeviceSummary } from "@/lib/device/useDeviceSummary";
 import { wattsFromTelemetry, voltsFromTelemetry } from "@/lib/device/power";
 import { MiniLineChart } from "@/components/ui/MiniLineChart";
 import { MiniBarChart } from "@/components/ui/MiniBarChart";
 import { PillTabs } from "@/components/ui/PillTabs";
+import { CycleRing } from "@/components/device/CycleRing";
 
 export const Route = createFileRoute("/overview")({
   component: OverviewScreen,
@@ -20,6 +22,7 @@ function OverviewScreen() {
   const deviceId = devices[0]?.id;
   const telemetry = useTelemetry(deviceId);
   const sonarHistory = useSonarHistory(deviceId);
+  const { cycleRing } = useDeviceSummary(deviceId);
   const [range, setRange] = useState<Range>("daily");
 
   const since = Date.now() - HOURS_48_MS;
@@ -68,6 +71,11 @@ function OverviewScreen() {
         value={range}
         onChange={setRange}
       />
+
+      <section>
+        <p className="mb-2 text-sm text-muted">Operation cycle</p>
+        <CycleRing summary={cycleRing} />
+      </section>
 
       {/* Water consumption — NOT AVAILABLE: the firmware has no flow sensor,
           so there is no data source for litres-consumed-per-day. Shown as an

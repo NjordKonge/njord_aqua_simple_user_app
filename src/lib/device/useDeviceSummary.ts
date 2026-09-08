@@ -10,6 +10,7 @@ import { useDevice, useConfig, useSonar, DEFAULT_CONFIG } from "./store";
 import { summarizeStatus, type StatusSummary } from "./status";
 import { summarizeHealth, type HealthSummary } from "./health";
 import { summarizeProgress, type ProgressSummary } from "./progress";
+import { summarizeCycleRing, type CycleRingSummary } from "./cycleRing";
 import { summarizeWaterStatus, type WaterStatusSummary } from "./waterStatus";
 import { summarizeTank, type TankSummary } from "./tank";
 import { wattsFromStatus } from "./power";
@@ -33,6 +34,9 @@ export interface DeviceSummary {
    *  Normal/High percentage into an absolute `cycle_c` target — see
    *  lib/device/dosing.ts. */
   cycleSeconds: number;
+  /** Live "operation cycle" progress — phase time elapsed/total and
+   *  delivered/target charge — for the graph page's cycle rings. */
+  cycleRing: CycleRingSummary;
   /** The current-controller's real target current (mA) — `target_ma`/`tma`,
    *  firmware `electrolysisTargetCurrentmA`. This is the actual setpoint the
    *  fixed-step PWM controller (AppStateMachine.cpp) drives the H-bridge
@@ -91,6 +95,11 @@ export function useDeviceSummary(deviceId: string | undefined): DeviceSummary {
     watts,
     dosingMode,
     cycleSeconds: config?.cycle_s ?? DEFAULT_CONFIG.cycle_s,
+    cycleRing: summarizeCycleRing(
+      device,
+      config?.cycle_s ?? DEFAULT_CONFIG.cycle_s,
+      config?.cycle_c ?? DEFAULT_CONFIG.cycle_c,
+    ),
     targetMa: config?.target_ma ?? DEFAULT_CONFIG.target_ma,
     electrolysisOn: online && elecOn,
     actions: {
