@@ -23,8 +23,15 @@ export function CycleRing({ summary }: { summary: CycleRingSummary }) {
   const { online, active, elapsedMs, totalMs, hasDeviceClock, deliveredC, targetC, elecMa, phaseLabel, deviceTime } = summary;
 
   const sampleRef = useRef({ at: Date.now(), elapsedMs });
-  const fallbackStartRef = useRef<number | null>(null);
-  const wasActiveRef = useRef(active);
+  // Initialized eagerly (not just via the effect below) so mounting the
+  // ring *while already active* — the normal case, since you typically
+  // open Overview after a cycle has already started — immediately has a
+  // start time instead of waiting for a false->true edge that will never
+  // come this mount. Without this, `fallbackStartRef.current` stayed null
+  // for the whole mount and the render fell back to `?? Date.now()` every
+  // time, which computes ~0 elapsed forever — i.e. the counter looked
+  // completely frozen, exactly the reported bug.
+  const fallbackStartRef = useRef<number | null>(active ? Date.now() : null);
   const [, setTick] = useState(0);
 
   // Resync to the device's latest sample whenever it changes.
@@ -32,11 +39,16 @@ export function CycleRing({ summary }: { summary: CycleRingSummary }) {
     sampleRef.current = { at: Date.now(), elapsedMs };
   }, [elapsedMs]);
 
-  // Fallback stopwatch: (re)start on the idle -> active edge.
+  // Fallback stopwatch: start counting the first time we see `active` with
+  // no start time recorded yet (covers both mounting mid-cycle and a later
+  // idle -> active transition); clear it once the cycle ends so the next
+  // cycle starts counting from 0 again instead of an old timestamp.
   useEffect(() => {
-    if (active && !wasActiveRef.current) fallbackStartRef.current = Date.now();
-    if (!active) fallbackStartRef.current = null;
-    wasActiveRef.current = active;
+    if (active) {
+      if (fallbackStartRef.current === null) fallbackStartRef.current = Date.now();
+    } else {
+      fallbackStartRef.current = null;
+    }
   }, [active]);
 
   // Local 250ms heartbeat to interpolate forward between notifications.

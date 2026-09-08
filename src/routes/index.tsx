@@ -8,6 +8,7 @@ import { startTreatment, stopTreatment, clearFault, pairDevice } from "@/lib/dev
 import { requestTankReading } from "@/lib/device/tank";
 import { setDosingMode, type DosingMode } from "@/lib/device/dosing";
 import { playModeChangeFeedback } from "@/lib/ui/feedback";
+import { BUILD_TAG } from "@/lib/buildInfo";
 import { Header } from "@/components/layout/Header";
 import { StatusRow } from "@/components/device/StatusRow";
 import { TankGraphic } from "@/components/device/TankGraphic";
@@ -94,6 +95,12 @@ function HomeScreen() {
 
   useEffect(() => {
     if (!device?.online) return;
+    // Immediately, not just on the interval below — otherwise returning to
+    // Home right after the mode actually changed elsewhere/earlier could
+    // still show the stale mode for up to CONFIG_REFRESH_MS before the
+    // first tick fires (mirrors the tank effect's immediate + interval
+    // pattern above).
+    sendCommand(device.id, "get_config");
     const id = setInterval(() => sendCommand(device.id, "get_config"), CONFIG_REFRESH_MS);
     return () => clearInterval(id);
   }, [device?.id, device?.online]);
@@ -106,6 +113,7 @@ function HomeScreen() {
           <p className="text-muted">Connect your Njord Aqua to get started.</p>
           <Button onClick={() => void pairDevice()}>Connect device</Button>
         </div>
+        <p className="mt-4 text-center text-xs text-muted">Build {BUILD_TAG}</p>
       </div>
     );
   }
@@ -121,6 +129,7 @@ function HomeScreen() {
       />
 
       <p className="text-sm text-muted">Overview of Tank 1</p>
+      <p className="-mt-4 text-xs text-muted">Build {BUILD_TAG}</p>
 
       <StatusRow
         tone={waterStatus.tone}
