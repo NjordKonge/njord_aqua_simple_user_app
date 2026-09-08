@@ -33,6 +33,10 @@ function OverviewScreen() {
     () => recent.map((s) => ({ t: s.t, v: wattsFromTelemetry(s) })),
     [recent],
   );
+  const ampSeries = useMemo(
+    () => recent.map((s) => ({ t: s.t, v: s.elec_ma })),
+    [recent],
+  );
   // Tank level is only sampled on-demand (see lib/device/tank.ts) — this is
   // whatever sonar shots happened to be taken while the app was open, not a
   // true continuous 48h history. Flagged: a real 48h tank chart needs the
@@ -95,6 +99,11 @@ function OverviewScreen() {
       <section>
         <p className="mb-2 text-sm text-muted">Power draw — last 48h</p>
         <MiniLineChart data={wattSeries} unit="W" xStartLabel="48h ago" xEndLabel="now" />
+      </section>
+
+      <section>
+        <p className="mb-2 text-sm text-muted">Electrode current — last 48h</p>
+        <MiniLineChart data={ampSeries} unit="mA" xStartLabel="48h ago" xEndLabel="now" />
       </section>
 
       {/* Last water delivery — NOT AVAILABLE: no firmware or app concept of a

@@ -33,6 +33,9 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Short local haptic buzz on chlorination mode change (feedback.ts). -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <!-- BLE (Android 12+ / API 31+) -->
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />

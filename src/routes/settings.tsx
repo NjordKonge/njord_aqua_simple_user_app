@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useDevices, useConfig, updateConfig } from "@/lib/device/store";
 import { pairDevice, forgetDevice, reconnectDevice } from "@/lib/device/actions";
 import {
@@ -29,6 +29,12 @@ export const Route = createFileRoute("/settings")({
 });
 
 const TANK_VOLUME_OPTIONS_L = [500, 1000, 1500, 2000, 3000, 5000];
+
+// Electrode hardware current cap. Used only to show a reference "max
+// deliverable charge this cycle" figure next to the Normal/High charge
+// fields (coulombs = amps × seconds) — it does not change what the app
+// sends to the device, it's just informational context for tuning.
+const MAX_CURRENT_CAP_A = 3;
 
 function SettingsScreen() {
   const devices = useDevices();
@@ -129,6 +135,18 @@ function SettingsScreen() {
           Sets how much charge (coulombs) the device delivers per cycle for the Normal and High
           chlorination modes on the Home screen. More charge produces more chlorine.
         </p>
+        <CycleLengthField
+          value={config?.cycle_s}
+          disabled={!device?.online}
+          onCommit={(v) => device?.online && updateConfig(device.id, { cycle_s: v })}
+        />
+        <p className="text-xs text-muted">
+          Theoretical max charge this cycle at the {MAX_CURRENT_CAP_A}A electrode current cap:{" "}
+          <span className="font-medium text-content">
+            {config?.cycle_s ? MAX_CURRENT_CAP_A * config.cycle_s : "—"} C
+          </span>{" "}
+          — use this as an upper reference when choosing the Normal/High values below.
+        </p>
         <ChargeLevelField
           label="Normal"
           value={chlorinationLevels.normalChargeC}
@@ -224,6 +242,52 @@ function ChargeLevelField({
           className="w-24 rounded-card border border-border bg-surface-muted px-3 py-2 text-right text-content"
         />
         <span className="text-xs text-muted">C</span>
+      </div>
+    </div>
+  );
+}
+
+function CycleLengthField({
+  value,
+  disabled,
+  onCommit,
+}: {
+  value: number | undefined;
+  disabled: boolean;
+  onCommit: (value: number) => void;
+}) {
+  const [text, setText] = useState(value != null ? String(value) : "");
+
+  // `value` comes from the live device config (unlike ChargeLevelField's
+  // phone-local value), so it can change out from under us — e.g. once it
+  // first loads after connecting, or once our own SETCFG round-trips back.
+  useEffect(() => {
+    setText(value != null ? String(value) : "");
+  }, [value]);
+
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <label className="text-sm">Cycle length</label>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={86400}
+          step={1}
+          value={text}
+          disabled={disabled}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={() => {
+            const parsed = Math.round(Number(text));
+            const fallback = value ?? 0;
+            const next = Number.isFinite(parsed) && parsed >= 1 && parsed <= 86400 ? parsed : fallback;
+            setText(String(next));
+            if (next !== value) onCommit(next);
+          }}
+          className="w-24 rounded-card border border-border bg-surface-muted px-3 py-2 text-right text-content disabled:opacity-50"
+        />
+        <span className="text-xs text-muted">s</span>
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import { useDeviceSummary } from "@/lib/device/useDeviceSummary";
 import { startTreatment, stopTreatment, clearFault, pairDevice } from "@/lib/device/actions";
 import { requestTankReading } from "@/lib/device/tank";
 import { setDosingMode, type DosingMode } from "@/lib/device/dosing";
+import { playModeChangeFeedback } from "@/lib/ui/feedback";
 import { Header } from "@/components/layout/Header";
 import { StatusRow } from "@/components/device/StatusRow";
 import { TankGraphic } from "@/components/device/TankGraphic";
@@ -32,6 +33,25 @@ function HomeScreen() {
     summary;
   const [infoOpen, setInfoOpen] = useState(false);
   const [modeInfoOpen, setModeInfoOpen] = useState(false);
+
+  // Optimistic mode display: SETCFG/START/STOP round-trip over BLE (ack,
+  // then a separate config re-read) before `dosingMode` derived from the
+  // real config catches up — visibly laggy otherwise. Show the tapped mode
+  // immediately, then let it settle once the device confirms; if nothing
+  // confirms within a few seconds (command failed, disconnect, etc.), fall
+  // back to the real device-derived mode rather than lying indefinitely.
+  const [pendingMode, setPendingMode] = useState<DosingMode | null>(null);
+  const displayedMode = pendingMode ?? dosingMode;
+
+  useEffect(() => {
+    if (pendingMode !== null && dosingMode === pendingMode) setPendingMode(null);
+  }, [dosingMode, pendingMode]);
+
+  useEffect(() => {
+    if (pendingMode === null) return;
+    const id = setTimeout(() => setPendingMode(null), 6000);
+    return () => clearTimeout(id);
+  }, [pendingMode]);
 
   useEffect(() => {
     if (!device?.online) return;
@@ -102,8 +122,12 @@ function HomeScreen() {
         </button>
       </div>
       <DosingModeToggle
-        mode={dosingMode}
-        onChange={(mode) => setDosingMode(device.id, mode)}
+        mode={displayedMode}
+        onChange={(mode) => {
+          setPendingMode(mode);
+          playModeChangeFeedback(mode);
+          setDosingMode(device.id, mode);
+        }}
       />
 
       {attention.length > 0 ? (
@@ -197,6 +221,13 @@ function DosingModeToggle({
     { value: "normal", label: "Normal" },
     { value: "high", label: "High" },
   ];
+  // Static lookup (never build Tailwind class names via template literals —
+  // the JIT scanner won't pick them up).
+  const SELECTED_BG: Record<DosingMode, string> = {
+    off: "bg-bad text-content",
+    normal: "bg-good text-bg",
+    high: "bg-good-strong text-content",
+  };
   return (
     <div className="grid grid-cols-3 gap-2 rounded-card bg-surface-muted p-1">
       {options.map((opt) => (
@@ -205,7 +236,7 @@ function DosingModeToggle({
           onClick={() => onChange(opt.value)}
           className={cn(
             "rounded-card px-3 py-3 text-sm font-medium transition-colors",
-            opt.value === mode ? "bg-brand text-bg" : "text-muted",
+            opt.value === mode ? SELECTED_BG[opt.value] : "text-muted",
           )}
         >
           {opt.label}

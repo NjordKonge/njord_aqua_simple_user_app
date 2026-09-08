@@ -177,6 +177,8 @@ function parseLiveStatusKeyed(text: string): LiveStatus | null {
     return Number.isFinite(n) ? n : 0;
   };
   const bool = (k: string) => kv.get(k) === "1";
+  const supplyMv = num("umv");
+  const cruiseDutyPm = num("dpm");
   return {
     state:      kv.get("st") ?? "",
     fault:      kv.get("flt") ?? "NONE",
@@ -185,12 +187,12 @@ function parseLiveStatusKeyed(text: string): LiveStatus | null {
     cycle_avg_ma: 0,
     batt_mv:    num("bmv"),
     solar_mv:   num("smv"),
-    supply_mv:  num("umv"),
+    supply_mv:  supplyMv,
     temp_c:     num("tc"),
     deliv_uc:   num("duc"),
     target_uc:  num("tuc"),
     phase:      kv.get("ph") ?? "",
-    cruise_duty_pm: num("dpm"),
+    cruise_duty_pm: cruiseDutyPm,
     polarity:   bool("pol"),
     batt_ok:    bool("bok"),
     solar_ok:   bool("sok"),
@@ -211,7 +213,12 @@ function parseLiveStatusKeyed(text: string): LiveStatus | null {
     // cycle ring is fully device-authoritative (no dependency on a separately
     // read Config). 0 on older firmware → CycleRing falls back to cfg.cycle_s.
     phase_total_ms:   num("ctm"),
-    elec_mv:          0,
+    // BUG FIX: this was hardcoded to 0, which meant Home's "Current watt"
+    // metric (power.ts wattsFromStatus) was always 0 and never updated.
+    // elec_mv has no dedicated wire key; it's derived the same way the
+    // positional (v2.0) parser's doc comment always described:
+    // cruise_duty_pm (‰) * supply_mv / 1000.
+    elec_mv:          Math.round((cruiseDutyPm * supplyMv) / 1000),
     cycle_duration_s: num("cds"),
     target_ma:        0,
     cycle_count:      0,
@@ -232,6 +239,8 @@ function parseLiveStatusPositional(text: string): LiveStatus | null {
   // the device-side rebuild surfaces them again.
   if (f.length < 24) return null;
   const num = (i: number) => parseInt(f[i], 10) || 0;
+  const supplyMv = num(6);
+  const cruiseDutyPm = num(11);
   return {
     state:      f[0],
     fault:      f[1],
@@ -240,7 +249,7 @@ function parseLiveStatusPositional(text: string): LiveStatus | null {
     cycle_avg_ma: 0,
     batt_mv:    num(4),
     solar_mv:   num(5),
-    supply_mv:  num(6),
+    supply_mv:  supplyMv,
     temp_c:     parseInt(f[7], 10) || 0,
     deliv_uc:   num(8),
     target_uc:  num(9),
@@ -248,7 +257,7 @@ function parseLiveStatusPositional(text: string): LiveStatus | null {
     // v2.0 wire field 11 is the instantaneous `duty_pm`; the UI still keys
     // off `cruise_duty_pm`, so we surface it under that name until the
     // firmware re-introduces the cruise average.
-    cruise_duty_pm: num(11),
+    cruise_duty_pm: cruiseDutyPm,
     polarity:   f[12] === "1",
     batt_ok:    f[13] === "1",
     solar_ok:   f[14] === "1",
@@ -263,7 +272,7 @@ function parseLiveStatusPositional(text: string): LiveStatus | null {
     inad_cur:         false,
     phase_elapsed_ms: 0,
     phase_total_ms:   0,
-    elec_mv:          0,
+    elec_mv:          Math.round((cruiseDutyPm * supplyMv) / 1000),
     cycle_duration_s: 0,
     target_ma:        0,
     cycle_count:      0,

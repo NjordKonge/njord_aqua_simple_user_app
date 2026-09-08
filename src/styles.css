@@ -20,6 +20,9 @@
   --color-info: #3b82c4;
   --color-warn: #e0a72e;
   --color-bad: #e0453f;
+  /* Darker green — High chlorination mode selected state (vs. --color-good
+     used for Normal), see routes/index.tsx DosingModeToggle. */
+  --color-good-strong: #1f7a37;
 
   --radius-card: 1.25rem;
 }
