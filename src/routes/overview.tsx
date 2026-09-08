@@ -4,6 +4,15 @@ import { ChevronLeft } from "lucide-react";
 import { useDevices, useTelemetry, useSonarHistory } from "@/lib/device/store";
 import { useDeviceSummary } from "@/lib/device/useDeviceSummary";
 import { wattsFromTelemetry, voltsFromTelemetry } from "@/lib/device/power";
+import {
+  useHistoryLog,
+  useMergedTelemetry,
+  useMergedSonar,
+  RANGE_WINDOW_MS,
+  RANGE_SINCE_LABEL,
+  RANGE_SHORT_LABEL,
+  type HistoryRange,
+} from "@/lib/device/history";
 import { MiniLineChart } from "@/components/ui/MiniLineChart";
 import { MiniBarChart } from "@/components/ui/MiniBarChart";
 import { PillTabs } from "@/components/ui/PillTabs";
@@ -13,45 +22,58 @@ export const Route = createFileRoute("/overview")({
   component: OverviewScreen,
 });
 
-type Range = "daily" | "weekly" | "monthly";
-const HOURS_48_MS = 48 * 60 * 60 * 1000;
-
 function OverviewScreen() {
   const navigate = useNavigate();
   const devices = useDevices();
-  const deviceId = devices[0]?.id;
+  const device = devices[0];
+  const deviceId = device?.id;
   const telemetry = useTelemetry(deviceId);
   const sonarHistory = useSonarHistory(deviceId);
   const { cycleRing } = useDeviceSummary(deviceId);
-  const [range, setRange] = useState<Range>("daily");
+  const [range, setRange] = useState<HistoryRange>("daily");
 
-  const since = Date.now() - HOURS_48_MS;
-  const recent = useMemo(() => telemetry.filter((s) => s.t >= since), [telemetry, since]);
+  // Pulls the firmware's own flash-log history for the selected window, so
+  // these charts show everything the device recorded — including while the
+  // app was closed — not just this session's live rolling buffer (see
+  // lib/device/history.ts for why that buffer alone isn't enough).
+  const { entries: logEntries, loading: historyLoading } = useHistoryLog(
+    deviceId,
+    Boolean(device?.online),
+    range,
+  );
+
+  const since = Date.now() - RANGE_WINDOW_MS[range];
+  const sinceLabel = RANGE_SINCE_LABEL[range];
+  const rangeShort = RANGE_SHORT_LABEL[range];
+
+  const mergedTelemetry = useMergedTelemetry(logEntries, telemetry, since);
+  // Tank level readings are only ever taken on-demand (see lib/device/tank.ts)
+  // — the firmware doesn't yet log periodic sonar samples on its own, so this
+  // still reflects whatever shots happened to be taken, just merged with any
+  // SON rows the flash log does have from those on-demand reads.
+  const mergedSonar = useMergedSonar(logEntries, sonarHistory, since);
 
   const tempSeries = useMemo(
-    () => recent.map((s) => ({ t: s.t, v: s.temp_c })),
-    [recent],
+    () => mergedTelemetry.map((s) => ({ t: s.t, v: s.temp_c })),
+    [mergedTelemetry],
   );
   const wattSeries = useMemo(
-    () => recent.map((s) => ({ t: s.t, v: wattsFromTelemetry(s) })),
-    [recent],
+    () => mergedTelemetry.map((s) => ({ t: s.t, v: wattsFromTelemetry(s) })),
+    [mergedTelemetry],
   );
   const voltSeries = useMemo(
-    () => recent.map((s) => ({ t: s.t, v: voltsFromTelemetry(s) })),
-    [recent],
+    () => mergedTelemetry.map((s) => ({ t: s.t, v: voltsFromTelemetry(s) })),
+    [mergedTelemetry],
   );
   const ampSeries = useMemo(
-    () => recent.map((s) => ({ t: s.t, v: s.elec_ma })),
-    [recent],
+    () => mergedTelemetry.map((s) => ({ t: s.t, v: s.elec_ma })),
+    [mergedTelemetry],
   );
-  // Tank level is only sampled on-demand (see lib/device/tank.ts) — this is
-  // whatever sonar shots happened to be taken while the app was open, not a
-  // true continuous 48h history. Flagged: a real 48h tank chart needs the
-  // firmware to log periodic sonar samples on its own.
   const recentSonar = useMemo(
-    () => sonarHistory.filter((s) => s.t >= since).map((s) => ({ t: s.t, v: s.dist_mm })),
-    [sonarHistory, since],
+    () => mergedSonar.map((s) => ({ t: s.t, v: s.dist_mm })),
+    [mergedSonar],
   );
+
 
   return (
     <div className="stagger space-y-6">
@@ -92,39 +114,68 @@ function OverviewScreen() {
       </section>
 
       <section>
-        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Water temperature — last 48h</p>
+        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">
+          Water temperature — last {rangeShort}
+        </p>
         <MiniLineChart
           data={tempSeries}
           unit="°C"
-          xStartLabel="48h ago"
+          xStartLabel={sinceLabel}
           xEndLabel="now"
+          emptyLabel={historyLoading ? "Loading device history…" : "No data yet"}
         />
       </section>
 
       <section>
-        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Tank level — last 48h</p>
+        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">
+          Tank level — last {rangeShort}
+        </p>
         <MiniLineChart
           data={recentSonar}
           unit="mm"
-          xStartLabel="48h ago"
+          xStartLabel={sinceLabel}
           xEndLabel="now"
-          emptyLabel="No sonar readings taken yet"
+          emptyLabel={historyLoading ? "Loading device history…" : "No sonar readings taken yet"}
         />
       </section>
 
       <section>
-        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Electrode voltage — last 48h</p>
-        <MiniLineChart data={voltSeries} unit="V" xStartLabel="48h ago" xEndLabel="now" />
+        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">
+          Electrode voltage — last {rangeShort}
+        </p>
+        <MiniLineChart
+          data={voltSeries}
+          unit="V"
+          xStartLabel={sinceLabel}
+          xEndLabel="now"
+          emptyLabel={historyLoading ? "Loading device history…" : "No data yet"}
+        />
       </section>
 
       <section>
-        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Electrode current — last 48h</p>
-        <MiniLineChart data={ampSeries} unit="mA" xStartLabel="48h ago" xEndLabel="now" />
+        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">
+          Electrode current — last {rangeShort}
+        </p>
+        <MiniLineChart
+          data={ampSeries}
+          unit="mA"
+          xStartLabel={sinceLabel}
+          xEndLabel="now"
+          emptyLabel={historyLoading ? "Loading device history…" : "No data yet"}
+        />
       </section>
 
       <section>
-        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Power draw — last 48h</p>
-        <MiniLineChart data={wattSeries} unit="W" xStartLabel="48h ago" xEndLabel="now" />
+        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">
+          Power draw — last {rangeShort}
+        </p>
+        <MiniLineChart
+          data={wattSeries}
+          unit="W"
+          xStartLabel={sinceLabel}
+          xEndLabel="now"
+          emptyLabel={historyLoading ? "Loading device history…" : "No data yet"}
+        />
       </section>
 
       {/* Last water delivery — NOT AVAILABLE: no firmware or app concept of a

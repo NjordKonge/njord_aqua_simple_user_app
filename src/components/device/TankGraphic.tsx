@@ -56,7 +56,7 @@ export function TankGraphic({
   return (
     <div className="flex flex-col items-center">
       <div
-        className="relative w-full max-w-[210px]"
+        className="relative w-full max-w-[320px]"
         style={{ aspectRatio: TANK_IMAGE_ASPECT }}
       >
         {/* Ambient bloom behind the tank, tinted by fill state. */}

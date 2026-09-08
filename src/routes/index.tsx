@@ -144,7 +144,7 @@ function HomeScreen() {
         onInfo={() => setInfoOpen(true)}
       />
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-[1fr_1.5fr] gap-4">
         <div className="space-y-4">
           <Metric icon={Thermometer} label="Water temperature" value={
             health?.temperature.available ? `${health.temperature.celsius}°C` : "—"
@@ -153,7 +153,7 @@ function HomeScreen() {
           <Metric icon={Droplets} label="Water used today" value="Not available" muted />
         </div>
 
-        <div className="surface-lift flex flex-col items-center justify-start rounded-card border border-border-soft bg-surface p-4">
+        <div className="surface-lift flex flex-col items-center justify-center rounded-card border border-border-soft bg-surface p-4">
           <TankGraphic
             percent={tank.percent}
             liters={tank.liters}
