@@ -17,6 +17,12 @@ export interface CycleRingSummary {
   /** Total ms for the current cycle phase — device-reported when active,
    *  else falls back to the configured cycle length. */
   totalMs: number;
+  /** Whether `elapsedMs`/`totalMs` came from the device's own phase clock
+   *  (`phase_elapsed_ms`/`phase_total_ms`, API v2.8+/v2.10+). False on
+   *  older firmware that doesn't report those fields (both stay 0) — the
+   *  ring then needs a host-side stopwatch fallback instead of trusting
+   *  `elapsedMs`, which would otherwise sit stuck at 0. */
+  hasDeviceClock: boolean;
   /** Delivered charge this cycle, in Coulombs (device reports µC). */
   deliveredC: number;
   /** Target charge this cycle, in Coulombs. Falls back to the configured
@@ -45,6 +51,7 @@ export function summarizeCycleRing(
   const online = Boolean(device?.online);
   const status = online ? device?.status : undefined;
   const active = status?.state === "ELECTROLYSIS_ACTIVE";
+  const hasDeviceClock = Boolean(status && (status.phase_total_ms > 0 || status.phase_elapsed_ms > 0));
 
   const totalMs = active && status && status.phase_total_ms > 0
     ? status.phase_total_ms
@@ -59,6 +66,7 @@ export function summarizeCycleRing(
     active: Boolean(active),
     elapsedMs,
     totalMs,
+    hasDeviceClock,
     deliveredC,
     targetC,
     elecMa: status?.elec_ma ?? 0,

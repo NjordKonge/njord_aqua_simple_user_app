@@ -12,17 +12,32 @@ import type { CycleRingSummary } from "@/lib/device/cycleRing";
  * resyncs to the device's authoritative `elapsedMs` on every update but
  * interpolates forward locally in between, so the time ring moves smoothly
  * instead of visibly jumping every couple of seconds.
+ *
+ * On firmware older than v2.8/v2.10 (`hasDeviceClock` false), the device
+ * never reports a phase clock at all — `elapsedMs` would just sit at 0
+ * forever, making the ring look frozen. Falls back to a host-side stopwatch
+ * that starts counting the moment the cycle goes active, same as the
+ * technical app's CycleRing fallback.
  */
 export function CycleRing({ summary }: { summary: CycleRingSummary }) {
-  const { online, active, elapsedMs, totalMs, deliveredC, targetC, elecMa, phaseLabel, deviceTime } = summary;
+  const { online, active, elapsedMs, totalMs, hasDeviceClock, deliveredC, targetC, elecMa, phaseLabel, deviceTime } = summary;
 
   const sampleRef = useRef({ at: Date.now(), elapsedMs });
+  const fallbackStartRef = useRef<number | null>(null);
+  const wasActiveRef = useRef(active);
   const [, setTick] = useState(0);
 
   // Resync to the device's latest sample whenever it changes.
   useEffect(() => {
     sampleRef.current = { at: Date.now(), elapsedMs };
   }, [elapsedMs]);
+
+  // Fallback stopwatch: (re)start on the idle -> active edge.
+  useEffect(() => {
+    if (active && !wasActiveRef.current) fallbackStartRef.current = Date.now();
+    if (!active) fallbackStartRef.current = null;
+    wasActiveRef.current = active;
+  }, [active]);
 
   // Local 250ms heartbeat to interpolate forward between notifications.
   useEffect(() => {
@@ -31,12 +46,19 @@ export function CycleRing({ summary }: { summary: CycleRingSummary }) {
     return () => clearInterval(id);
   }, [active]);
 
-  const interpolatedMs = active
-    ? Math.min(totalMs, sampleRef.current.elapsedMs + (Date.now() - sampleRef.current.at))
-    : 0;
+  let interpolatedMs = 0;
+  if (active) {
+    if (hasDeviceClock) {
+      interpolatedMs = Math.min(totalMs, sampleRef.current.elapsedMs + (Date.now() - sampleRef.current.at));
+    } else {
+      const start = fallbackStartRef.current ?? Date.now();
+      interpolatedMs = Math.min(totalMs, Date.now() - start);
+    }
+  }
 
   const timePct = totalMs > 0 ? Math.min(100, (interpolatedMs / totalMs) * 100) : 0;
   const chargePct = targetC > 0 ? Math.min(100, (deliveredC / targetC) * 100) : 0;
+
 
   const size = 200;
   const c = size / 2;

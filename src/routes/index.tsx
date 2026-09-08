@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { Settings as SettingsIcon, Thermometer, Zap, Droplets, HelpCircle } from "lucide-react";
-import { useDevices, useCommands } from "@/lib/device/store";
+import { useDevices, useCommands, sendCommand } from "@/lib/device/store";
 import type { CommandEntry } from "@/lib/device/types";
 import { useDeviceSummary } from "@/lib/device/useDeviceSummary";
 import { startTreatment, stopTreatment, clearFault, pairDevice } from "@/lib/device/actions";
@@ -24,6 +24,17 @@ export const Route = createFileRoute("/")({
 // reasonably current (uses the existing, already-supported sonar_shot
 // command; see lib/device/tank.ts).
 const TANK_REFRESH_MS = 30_000;
+
+// Config (and therefore dosingMode, derived from config.elec_en/cycle_c) is
+// otherwise only re-read after a START/STOP/SETCFG this app itself sent (see
+// store.ts sendCommand's ack handler). Anything that changes elec_en outside
+// that — e.g. the firmware forcing electrolysisEnabled=0 on entering a fault
+// (EnterError(), BLE_DEVELOPER_GUIDE.md), or a missed/raced ack — leaves the
+// local copy stale with no trigger to ever refresh it, which showed up as
+// the mode toggle still saying "Off" after returning to Home even though the
+// device was actually running. A light periodic GETCFG while Home is open
+// bounds that staleness to a few seconds instead of indefinitely.
+const CONFIG_REFRESH_MS = 10_000;
 
 function HomeScreen() {
   const navigate = useNavigate();
@@ -78,6 +89,12 @@ function HomeScreen() {
     if (!device?.online) return;
     requestTankReading(device.id);
     const id = setInterval(() => requestTankReading(device.id), TANK_REFRESH_MS);
+    return () => clearInterval(id);
+  }, [device?.id, device?.online]);
+
+  useEffect(() => {
+    if (!device?.online) return;
+    const id = setInterval(() => sendCommand(device.id, "get_config"), CONFIG_REFRESH_MS);
     return () => clearInterval(id);
   }, [device?.id, device?.online]);
 
