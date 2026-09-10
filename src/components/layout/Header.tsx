@@ -1,17 +1,18 @@
 /**
- * Screen header: Njord wordmark top-left, optional action icon top-right.
+ * Screen header: Njord Aqua wordmark top-left, optional action icon top-right.
+ *
+ * Plain text (not the logo image asset) — the image rendered poorly at this
+ * size, and the app already sets Roboto as the global font, so a text
+ * wordmark renders crisply at any density without needing an asset.
  */
 import type { ReactNode } from "react";
 
 export function Header({ right }: { right?: ReactNode }) {
   return (
     <div className="mb-6 flex items-center justify-between">
-      <img
-        src="/njord-logo-white.png"
-        alt="Njord"
-        className="h-6 w-auto"
-        style={{ filter: "drop-shadow(0 2px 10px rgb(0 0 0 / 0.5))" }}
-      />
+      <span className="text-[1.0625rem] font-medium tracking-tight text-content">
+        Njord Aqua
+      </span>
       {right}
     </div>
   );

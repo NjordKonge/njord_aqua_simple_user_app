@@ -2,8 +2,9 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * Neutral container primitive. Visual treatment comes from design tokens in
- * styles.css, so this stays unopinionated until the design step.
+ * Neutral container primitive: white surface, hairline border, ~16dp
+ * padding, minimal shadow. Visual treatment comes from design tokens in
+ * styles.css.
  */
 export function Card({
   children,
@@ -15,7 +16,7 @@ export function Card({
   return (
     <div
       className={cn(
-        "surface-lift rounded-card border border-border-soft bg-surface p-5",
+        "surface-lift rounded-card border border-border-soft bg-surface p-4",
         className,
       )}
     >

@@ -38,7 +38,7 @@ function AlertsScreen() {
   return (
     <div className="stagger space-y-6">
       <Header />
-      <h1 className="text-2xl font-semibold">Alerts</h1>
+      <h1 className="type-title">Alerts</h1>
 
       <StatusRow
         tone={waterStatus.tone}
@@ -48,7 +48,7 @@ function AlertsScreen() {
       />
 
       <section>
-        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Active</p>
+        <p className="mb-2.5 type-label uppercase tracking-wider text-faint">Active</p>
         {device && device.alarms.length > 0 ? (
           <div className="space-y-2">
             {device.alarms.map((alarm) => {
@@ -56,16 +56,9 @@ function AlertsScreen() {
               return (
                 <div
                   key={alarm.id}
-                  className="surface-lift relative overflow-hidden rounded-card border border-border-soft bg-surface p-4 pl-[1.125rem]"
-                  style={{
-                    backgroundImage: `linear-gradient(100deg, color-mix(in srgb, ${tone} 11%, transparent), transparent 55%)`,
-                  }}
+                  className="surface-lift relative overflow-hidden rounded-card border border-border-soft bg-surface py-4 pl-[1.125rem] pr-4"
                 >
-                  <span
-                    aria-hidden
-                    className="absolute inset-y-0 left-0 w-[3px]"
-                    style={{ background: `linear-gradient(to bottom, transparent, ${tone}, transparent)` }}
-                  />
+                  <span aria-hidden className="absolute inset-y-3 left-0 w-[3px] rounded-full" style={{ backgroundColor: tone }} />
                   <p className={cn("font-medium", SEVERITY_TONE_CLASS[alarm.severity] ?? "text-info")}>
                     {alarm.message}
                   </p>
@@ -75,17 +68,14 @@ function AlertsScreen() {
           </div>
         ) : (
           <div className="surface-lift flex items-center gap-2.5 rounded-card border border-border-soft bg-surface p-4">
-            <span
-              className="h-2 w-2 shrink-0 rounded-full bg-good"
-              style={{ boxShadow: "0 0 10px var(--color-good)" }}
-            />
+            <span className="h-2 w-2 shrink-0 rounded-full bg-good" />
             <p className="text-muted">No active alerts.</p>
           </div>
         )}
       </section>
 
       <section>
-        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Alert reference</p>
+        <p className="mb-2.5 type-label uppercase tracking-wider text-faint">Alert reference</p>
         <div className="surface-lift overflow-hidden rounded-card border border-border-soft">
           {ALERT_REFERENCE.map((alert) => (
             <button

@@ -53,18 +53,15 @@ function SettingsScreen() {
   return (
     <div className="stagger space-y-6">
       <Header />
-      <h1 className="text-2xl font-semibold">Settings</h1>
+      <h1 className="type-title">Settings</h1>
 
       {/* Bluetooth */}
       <section>
         {device?.online ? (
           <div className="surface-lift space-y-3 rounded-card border border-border-soft bg-surface p-4">
-            <p className="text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Bluetooth</p>
+            <p className="type-label uppercase tracking-wider text-faint">Bluetooth</p>
             <p className="flex items-center gap-2 text-good">
-              <span
-                className="h-2 w-2 shrink-0 animate-breathe rounded-full bg-good"
-                style={{ boxShadow: "0 0 10px var(--color-good)" }}
-              />
+              <span className="h-2 w-2 shrink-0 animate-breathe rounded-full bg-good" />
               Connected to {device.name}
             </p>
             <Button variant="secondary" onClick={() => void forgetDevice(device.id)}>
@@ -73,8 +70,12 @@ function SettingsScreen() {
           </div>
         ) : device ? (
           <div className="surface-lift space-y-3 rounded-card border border-border-soft bg-surface p-4">
-            <p className="text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Bluetooth</p>
+            <p className="type-label uppercase tracking-wider text-faint">Bluetooth</p>
+            <p className="text-muted">Not connected to {device.name}</p>
             <Button onClick={() => void reconnectDevice(device.id)}>Reconnect</Button>
+            <Button variant="secondary" onClick={() => void forgetDevice(device.id)}>
+              Forget device
+            </Button>
           </div>
         ) : (
           <Button onClick={() => void pairDevice()}>Pair device</Button>
@@ -83,7 +84,7 @@ function SettingsScreen() {
 
       {/* Tank setup */}
       <section>
-        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Tank setup</p>
+        <p className="mb-2.5 type-label uppercase tracking-wider text-faint">Tank setup</p>
         <div className="surface-lift overflow-hidden rounded-card border border-border-soft">
           <ListRow
             label="Tank model"
@@ -101,7 +102,7 @@ function SettingsScreen() {
 
       {/* Water source */}
       <section>
-        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Water source</p>
+        <p className="mb-2.5 type-label uppercase tracking-wider text-faint">Water source</p>
         <div className="surface-lift overflow-hidden rounded-card border border-border-soft">
           <ListRow
             label="Source type"
@@ -115,7 +116,7 @@ function SettingsScreen() {
       {/* Pre-chlorination */}
       <section className="surface-lift rounded-card border border-border-soft bg-surface p-4">
         <div className="mb-3 flex items-baseline justify-between">
-          <p className="text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Pre-chlorination of incoming water</p>
+          <p className="type-label uppercase tracking-wider text-faint">Pre-chlorination of incoming water</p>
           <p className="tnum shrink-0 pl-3 font-semibold text-brand">{prechlorination.toFixed(1)} mg/L</p>
         </div>
         <input
@@ -135,7 +136,7 @@ function SettingsScreen() {
 
       {/* Electrode current */}
       <section className="surface-lift space-y-3 rounded-card border border-border-soft bg-surface p-4">
-        <p className="text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Electrode current</p>
+        <p className="type-label uppercase tracking-wider text-faint">Electrode current</p>
         <p className="text-xs text-muted">
           The device drives the electrode with a PWM current controller (see AppStateMachine.cpp)
           that continuously adjusts the H-bridge duty cycle to track this target current — it is
@@ -151,7 +152,7 @@ function SettingsScreen() {
 
       {/* Chlorination charge levels */}
       <section className="surface-lift space-y-3 rounded-card border border-border-soft bg-surface p-4">
-        <p className="text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Chlorination charge levels</p>
+        <p className="type-label uppercase tracking-wider text-faint">Chlorination charge levels</p>
         <p className="text-xs text-muted">
           Sets how much charge the device delivers per cycle for the Normal and High chlorination
           modes on the Home screen, as a percentage of the theoretical max charge deliverable in
@@ -276,7 +277,7 @@ function PercentChargeField({
             setText(String(next));
             if (next !== percent) onCommit(next);
           }}
-          className="w-20 rounded-card border border-border bg-surface-muted px-3 py-2 text-right text-content"
+          className="w-20 rounded-inner border border-border bg-surface px-3 py-2.5 text-right text-content transition-colors focus:border-brand focus:outline-none"
         />
         <span className="text-xs text-muted">% ({referenceC ?? "—"} C)</span>
       </div>
@@ -322,7 +323,7 @@ function CycleLengthField({
             setText(String(next));
             if (next !== value) onCommit(next);
           }}
-          className="w-24 rounded-card border border-border bg-surface-muted px-3 py-2 text-right text-content disabled:opacity-50"
+          className="w-24 rounded-inner border border-border bg-surface px-3 py-2.5 text-right text-content transition-colors focus:border-brand focus:outline-none disabled:opacity-50"
         />
         <span className="text-xs text-muted">s</span>
       </div>
@@ -371,7 +372,7 @@ function TargetCurrentField({
             setText(String(next));
             if (next !== value) onCommit(next);
           }}
-          className="w-24 rounded-card border border-border bg-surface-muted px-3 py-2 text-right text-content disabled:opacity-50"
+          className="w-24 rounded-inner border border-border bg-surface px-3 py-2.5 text-right text-content transition-colors focus:border-brand focus:outline-none disabled:opacity-50"
         />
         <span className="text-xs text-muted">mA (max {TARGET_CURRENT_MAX_MA / 1000}A)</span>
       </div>

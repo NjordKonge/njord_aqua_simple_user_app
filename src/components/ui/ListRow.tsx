@@ -32,7 +32,7 @@ export function ListRow({
           : undefined
       }
       className={cn(
-        "flex w-full items-center justify-between gap-3 bg-surface-muted px-4 py-3.5 text-left",
+        "flex min-h-14 w-full items-center justify-between gap-3 bg-surface-muted px-4 py-3 text-left",
         "not-last:border-b not-last:border-border-soft first:rounded-t-card last:rounded-b-card",
         clickable && "press active:bg-surface-raised",
         disabled && "opacity-50",
@@ -43,7 +43,7 @@ export function ListRow({
       <span className="flex items-center gap-2 text-muted">
         {value}
         {chevron && clickable ? (
-          <ChevronRight size={17} className="text-faint" />
+          <ChevronRight size={18} className="text-faint" />
         ) : null}
       </span>
     </Comp>

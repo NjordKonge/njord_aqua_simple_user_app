@@ -82,63 +82,35 @@ export function CycleRing({ summary }: { summary: CycleRingSummary }) {
   return (
     <div className="surface-lift flex flex-col items-center gap-3 rounded-card border border-border-soft bg-surface p-4">
       <div className="relative">
-        {/* Bloom behind the dial, brightening as the cycle progresses. Only
-            lit while active so an idle device stays visually quiet. */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 -z-10 transition-opacity duration-700"
-          style={{
-            opacity: active ? 0.55 + (timePct / 100) * 0.45 : 0,
-            background:
-              "radial-gradient(closest-side, color-mix(in srgb, var(--color-info) 26%, transparent), transparent 78%)",
-          }}
-        />
         <svg viewBox={`0 0 ${size} ${size}`} className="h-auto w-full max-w-[220px]" role="img" aria-label="Operation cycle progress">
-          <defs>
-            <linearGradient id="cycle-time-grad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="color-mix(in srgb, var(--color-info) 55%, white)" />
-              <stop offset="100%" stopColor="var(--color-info)" />
-            </linearGradient>
-            <linearGradient id="cycle-charge-grad" x1="0" y1="1" x2="1" y2="0">
-              <stop offset="0%" stopColor="var(--color-good)" />
-              <stop offset="100%" stopColor="color-mix(in srgb, var(--color-good) 55%, white)" />
-            </linearGradient>
-          </defs>
-
-          <circle cx={c} cy={c} r={rOuter} fill="none" stroke="var(--color-surface-muted)" strokeWidth={12} />
+          <circle cx={c} cy={c} r={rOuter} fill="none" stroke="var(--color-surface-muted)" strokeWidth={10} />
           <circle
             cx={c}
             cy={c}
             r={rOuter}
             fill="none"
-            stroke="url(#cycle-time-grad)"
-            strokeWidth={12}
+            stroke="var(--color-info)"
+            strokeWidth={10}
             strokeLinecap="round"
             strokeDasharray={circOuter}
             strokeDashoffset={circOuter * (1 - timePct / 100)}
             transform={`rotate(-90 ${c} ${c})`}
-            style={{
-              transition: "stroke-dashoffset 0.4s ease-out",
-              filter: "drop-shadow(0 0 6px color-mix(in srgb, var(--color-info) 55%, transparent))",
-            }}
+            style={{ transition: "stroke-dashoffset 0.4s ease-out" }}
           />
 
-          <circle cx={c} cy={c} r={rInner} fill="none" stroke="var(--color-surface-muted)" strokeWidth={12} />
+          <circle cx={c} cy={c} r={rInner} fill="none" stroke="var(--color-surface-muted)" strokeWidth={10} />
           <circle
             cx={c}
             cy={c}
             r={rInner}
             fill="none"
-            stroke="url(#cycle-charge-grad)"
-            strokeWidth={12}
+            stroke="var(--color-good)"
+            strokeWidth={10}
             strokeLinecap="round"
             strokeDasharray={circInner}
             strokeDashoffset={circInner * (1 - chargePct / 100)}
             transform={`rotate(-90 ${c} ${c})`}
-            style={{
-              transition: "stroke-dashoffset 0.4s ease-out",
-              filter: "drop-shadow(0 0 6px color-mix(in srgb, var(--color-good) 55%, transparent))",
-            }}
+            style={{ transition: "stroke-dashoffset 0.4s ease-out" }}
           />
 
           <text
@@ -147,11 +119,11 @@ export function CycleRing({ summary }: { summary: CycleRingSummary }) {
             textAnchor="middle"
             fill="var(--color-content)"
             className="tnum"
-            style={{ fontSize: 30, fontWeight: 650, letterSpacing: "-0.03em" }}
+            style={{ fontSize: 30, fontWeight: 500, letterSpacing: "-0.02em" }}
           >
             {online ? `${elecMa.toFixed(0)}` : "—"}
           </text>
-          <text x={c} y={c + 16} textAnchor="middle" fill="var(--color-faint)" style={{ fontSize: 11, letterSpacing: 1.4 }}>
+          <text x={c} y={c + 16} textAnchor="middle" fill="var(--color-faint)" style={{ fontSize: 12, letterSpacing: 1.2 }}>
             mA
           </text>
           <text
@@ -159,7 +131,7 @@ export function CycleRing({ summary }: { summary: CycleRingSummary }) {
             y={c + 36}
             textAnchor="middle"
             fill={online && active ? "var(--color-info)" : "var(--color-faint)"}
-            style={{ fontSize: 10.5, letterSpacing: 1.4, fontWeight: 600, textTransform: "uppercase" }}
+            style={{ fontSize: 11, letterSpacing: 1.2, fontWeight: 500, textTransform: "uppercase" }}
           >
             {online ? phaseLabel : "Not connected"}
           </text>
@@ -171,28 +143,22 @@ export function CycleRing({ summary }: { summary: CycleRingSummary }) {
       )}
 
       <div className="grid w-full grid-cols-2 gap-3 text-xs">
-        <div className="flex flex-col gap-0.5 rounded-inner bg-surface-muted/60 p-3">
+        <div className="flex flex-col gap-0.5 rounded-inner bg-surface-muted p-3">
           <span className="inline-flex items-center gap-1.5 text-muted">
-            <span
-              className="h-2 w-2 rounded-full"
-              style={{ background: "var(--color-info)", boxShadow: "0 0 7px var(--color-info)" }}
-            />
+            <span className="h-2 w-2 rounded-full" style={{ background: "var(--color-info)" }} />
             Cycle time
           </span>
-          <span className="tnum font-semibold text-content">
+          <span className="tnum font-medium text-content">
             {formatDuration(interpolatedMs)} / {formatDuration(totalMs)}
           </span>
           <span className="tnum text-faint">{active ? `${timePct.toFixed(0)}%` : "—"}</span>
         </div>
-        <div className="flex flex-col gap-0.5 rounded-inner bg-surface-muted/60 p-3">
+        <div className="flex flex-col gap-0.5 rounded-inner bg-surface-muted p-3">
           <span className="inline-flex items-center gap-1.5 text-muted">
-            <span
-              className="h-2 w-2 rounded-full"
-              style={{ background: "var(--color-good)", boxShadow: "0 0 7px var(--color-good)" }}
-            />
+            <span className="h-2 w-2 rounded-full" style={{ background: "var(--color-good)" }} />
             Chlorine charge
           </span>
-          <span className="tnum font-semibold text-content">
+          <span className="tnum font-medium text-content">
             {deliveredC.toFixed(0)} / {targetC.toFixed(0)} C
           </span>
           <span className="tnum text-faint">{targetC > 0 ? `${chargePct.toFixed(0)}%` : "—"}</span>

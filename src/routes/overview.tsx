@@ -22,18 +22,6 @@ export const Route = createFileRoute("/overview")({
   component: OverviewScreen,
 });
 
-// Each chart gets its own shade along a single blue → white ramp (anchored to
-// the brand color so it stays in sync with the rest of the theme) instead of
-// every trace using identical brand blue — makes five stacked charts
-// scannable at a glance instead of a wall of same-colored lines.
-const CHART_COLORS = {
-  temp: "var(--color-brand)",
-  tank: "color-mix(in srgb, var(--color-brand) 80%, white)",
-  volt: "color-mix(in srgb, var(--color-brand) 60%, white)",
-  amp: "color-mix(in srgb, var(--color-brand) 38%, white)",
-  watt: "color-mix(in srgb, var(--color-brand) 18%, white)",
-} as const;
-
 function OverviewScreen() {
   const navigate = useNavigate();
   const devices = useDevices();
@@ -111,7 +99,7 @@ function OverviewScreen() {
         >
           <ChevronLeft size={23} />
         </button>
-        <h1 className="text-2xl font-semibold">Overview</h1>
+        <h1 className="type-title">Overview</h1>
       </div>
 
       {/* -mx-5/px-5 bleeds to the screen edge so 5 pills have room to
@@ -150,7 +138,7 @@ function OverviewScreen() {
       </button>
 
       <section>
-        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Operation cycle</p>
+        <p className="mb-2.5 type-label uppercase tracking-wider text-faint">Operation cycle</p>
         <CycleRing summary={cycleRing} />
       </section>
 
@@ -159,13 +147,13 @@ function OverviewScreen() {
           explicit empty state rather than fabricated numbers; flag for
           PM/firmware-owner whether a flow meter is planned. */}
       <section>
-        <p className="mb-1 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Water consumption</p>
-        <p className="mb-3 text-3xl font-semibold text-faint">Not available</p>
+        <p className="mb-1 type-label uppercase tracking-wider text-faint">Water consumption</p>
+        <p className="mb-3 type-reading text-faint">Not available</p>
         <MiniBarChart data={[]} unit="L" />
       </section>
 
       <section>
-        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">
+        <p className="mb-2.5 type-label uppercase tracking-wider text-faint">
           Water temperature — last {rangeShort}
         </p>
         <MiniLineChart
@@ -173,13 +161,12 @@ function OverviewScreen() {
           unit="°C"
           xStartLabel={tempLabels.start}
           xEndLabel={tempLabels.end}
-          color={CHART_COLORS.temp}
           emptyLabel={historyLoading ? "Loading device history…" : "No data yet"}
         />
       </section>
 
       <section>
-        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">
+        <p className="mb-2.5 type-label uppercase tracking-wider text-faint">
           Tank level — last {rangeShort}
         </p>
         <MiniLineChart
@@ -187,13 +174,12 @@ function OverviewScreen() {
           unit="mm"
           xStartLabel={tankLabels.start}
           xEndLabel={tankLabels.end}
-          color={CHART_COLORS.tank}
           emptyLabel={historyLoading ? "Loading device history…" : "No sonar readings taken yet"}
         />
       </section>
 
       <section>
-        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">
+        <p className="mb-2.5 type-label uppercase tracking-wider text-faint">
           Electrode voltage — last {rangeShort}
         </p>
         <MiniLineChart
@@ -201,13 +187,12 @@ function OverviewScreen() {
           unit="V"
           xStartLabel={voltLabels.start}
           xEndLabel={voltLabels.end}
-          color={CHART_COLORS.volt}
           emptyLabel={historyLoading ? "Loading device history…" : "No data yet"}
         />
       </section>
 
       <section>
-        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">
+        <p className="mb-2.5 type-label uppercase tracking-wider text-faint">
           Electrode current — last {rangeShort}
         </p>
         <MiniLineChart
@@ -215,13 +200,12 @@ function OverviewScreen() {
           unit="mA"
           xStartLabel={ampLabels.start}
           xEndLabel={ampLabels.end}
-          color={CHART_COLORS.amp}
           emptyLabel={historyLoading ? "Loading device history…" : "No data yet"}
         />
       </section>
 
       <section>
-        <p className="mb-2.5 text-[0.6875rem] font-medium uppercase tracking-wider text-faint">
+        <p className="mb-2.5 type-label uppercase tracking-wider text-faint">
           Power draw — last {rangeShort}
         </p>
         <MiniLineChart
@@ -229,7 +213,6 @@ function OverviewScreen() {
           unit="W"
           xStartLabel={wattLabels.start}
           xEndLabel={wattLabels.end}
-          color={CHART_COLORS.watt}
           emptyLabel={historyLoading ? "Loading device history…" : "No data yet"}
         />
       </section>
@@ -237,7 +220,7 @@ function OverviewScreen() {
       {/* Last water delivery — NOT AVAILABLE: no firmware or app concept of a
           "delivery" event exists today. */}
       <section className="surface-lift rounded-card border border-border-soft bg-surface p-4">
-        <p className="text-[0.6875rem] font-medium uppercase tracking-wider text-faint">Last water delivery</p>
+        <p className="type-label uppercase tracking-wider text-faint">Last water delivery</p>
         <p className="mt-1 text-muted">Not available</p>
       </section>
     </div>

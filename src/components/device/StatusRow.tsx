@@ -28,12 +28,12 @@ const TONE_VAR: Record<Tone, string> = {
  * "?" that opens the detail sheet. Not a full-width banner — sits as a row
  * within the page, per spec.
  *
- * This is the first thing the eye lands on, so it carries the most treatment:
- * a soft wash of the status tone bleeding in from the left edge, a hairline
- * left rule in that tone, and a dot that emits light rather than just being
- * coloured. The tint is very low-alpha on purpose — enough that the card's
- * mood changes with the water status, not so much that it becomes a warning
- * banner for the "all good" case.
+ * A plain white card with a hairline left rule in the status tone and a
+ * flat coloured dot — no wash, no glow. Keeping the treatment quiet here
+ * matters: this row communicates *connection/activity*, which must stay
+ * visually distinct from an actual verified-safe water reading (spec
+ * requirement), so it should never look more emphatic than the tone alone
+ * warrants.
  */
 export function StatusRow({
   tone,
@@ -48,31 +48,21 @@ export function StatusRow({
 }) {
   const toneColor = TONE_VAR[tone];
   return (
-    <div
-      className="surface-lift relative flex items-start gap-3 overflow-hidden rounded-card border border-border-soft bg-surface p-4 pl-[1.125rem]"
-      style={{
-        backgroundImage: `linear-gradient(100deg, color-mix(in srgb, ${toneColor} 11%, transparent), transparent 55%)`,
-      }}
-    >
+    <div className="surface-lift relative flex items-start gap-3 overflow-hidden rounded-card border border-border-soft bg-surface p-4 pl-[1.125rem]">
       <span
         aria-hidden
-        className="absolute inset-y-0 left-0 w-[3px]"
-        style={{
-          background: `linear-gradient(to bottom, transparent, ${toneColor}, transparent)`,
-        }}
+        className="absolute inset-y-3 left-0 w-[3px] rounded-full"
+        style={{ backgroundColor: toneColor }}
       />
-      <span
-        className={cn("relative mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full", DOT_TONE[tone])}
-        style={{ boxShadow: `0 0 0 3px color-mix(in srgb, ${toneColor} 16%, transparent), 0 0 12px ${toneColor}` }}
-      />
+      <span className={cn("relative mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full", DOT_TONE[tone])} />
       <div className="flex-1">
-        <p className={cn("font-semibold", TEXT_TONE[tone])}>{label}</p>
+        <p className={cn("type-heading", TEXT_TONE[tone])}>{label}</p>
         <p className="mt-0.5 text-sm leading-snug text-muted">{message}</p>
       </div>
       <button
         aria-label="More information"
         onClick={onInfo}
-        className="press -mr-1 -mt-1 rounded-full p-1 text-faint"
+        className="press -mr-1 -mt-1 flex h-9 w-9 items-center justify-center rounded-full text-faint"
       >
         <HelpCircle size={19} />
       </button>

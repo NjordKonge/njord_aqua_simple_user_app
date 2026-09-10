@@ -1,69 +1,73 @@
 @import "tailwindcss";
 
 /* ---------------------------------------------------------------------------
- * DESIGN TOKENS — from the "Overhead Tank Disinfection App" spec (2026-09-07).
+ * DESIGN TOKENS — "precise water-technology instrument" restyle (2026-09-08).
  * Screens reference tokens (bg-surface, text-muted, etc.), never raw hex.
  *
- * The palette is deliberately near-monochrome with a cool (aqua) bias, so the
- * only genuinely saturated things on screen are the ones that carry meaning:
- * water level, chlorination state, and status tones. Depth comes from layered
- * surfaces + a hairline top highlight rather than heavy drop shadows, which
- * read as grey haze on an OLED phone panel.
+ * Light, cool, quietly technical: an off-white instrument face, white cards,
+ * a single deep-blue interactive colour, and a restrained orange used only
+ * for one sparing highlight. Depth comes from a hairline border + a very
+ * light shadow rather than glows or gradients — nothing on screen should
+ * read as decorative, only status tones (good/warn/bad) and connection
+ * state carry real meaning, and those two concepts are kept visually
+ * distinct: a connected/running device is never styled to imply the water
+ * itself has been verified safe.
  * ------------------------------------------------------------------------- */
 @theme {
   /* Surfaces — each step is a real elevation level, don't invent in-betweens. */
-  --color-bg: #0a0c0f;
-  --color-surface: #14171c;
-  --color-surface-muted: #1c2027;
-  --color-surface-raised: #232833;
-  --color-border: #262b34;
-  --color-border-soft: #1e222a;
+  --color-bg: #f4f7f9;
+  --color-surface: #ffffff;
+  --color-surface-muted: #eef3f6;
+  --color-surface-raised: #e3eaef;
+  --color-border: #dce5ea;
+  --color-border-soft: #e7eef1;
 
-  --color-content: #f4f6f8;
-  --color-muted: #8d95a3;
-  --color-faint: #5d6572;
+  --color-content: #142d3d;
+  --color-muted: #526674;
+  --color-faint: #63758a;
 
-  --color-brand: #3b9fd6;
-  --color-brand-deep: #1d5f88;
+  /* Text/icons drawn on top of a solid brand/status fill (buttons, selected
+     segmented-control thumb) — plain white reads crisper on a saturated
+     fill than the near-white page background does. */
+  --color-on-fill: #ffffff;
 
-  /* Status tones — semantic only (never used decoratively). */
-  --color-good: #34c759;
-  --color-info: #3b9fd6;
-  --color-warn: #e0a72e;
-  --color-bad: #e0453f;
-  /* Darker green — High chlorination mode selected state (vs. --color-good
-     used for Normal), see routes/index.tsx DosingModeToggle. */
-  --color-good-strong: #1f7a37;
+  --color-brand: #17658a;
+  --color-brand-deep: #0f4c68;
+  /* Restrained accent — sparingly, for the one UI "selected/elevated"
+     highlight that isn't itself a device-safety status (High chlorination
+     mode). Not used for navigation or dropdown selection, which stay blue. */
+  --color-accent: #d87832;
 
-  --radius-card: 1.25rem;
-  --radius-inner: 0.875rem;
+  /* Status tones — semantic only (never used decoratively), reserved for
+     actual device/connection/water-condition states. */
+  --color-good: #247451;
+  --color-info: #17658a;
+  --color-warn: #986200;
+  --color-bad: #b23b3b;
 
-  /* Elevation. Kept low-opacity and tight; the inset hairline (.surface-lift
-     below) does most of the "raised" work instead of a big soft shadow. */
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -12px rgb(0 0 0 / 0.55);
-  --shadow-pop: 0 2px 6px rgb(0 0 0 / 0.45), 0 20px 44px -20px rgb(0 0 0 / 0.7);
+  --radius-card: 1rem;
+  --radius-inner: 0.75rem;
 
-  /* Motion. One "standard" curve everywhere so the whole app feels like it
-     was built by one person; --ease-spring only for things the user just
-     physically touched. */
+  /* Elevation. A hairline border does most of the "raised" work; the shadow
+     is only there to lift a card a little off the page, not to dramatize it. */
+  --shadow-card: 0 1px 2px rgb(20 45 61 / 0.05), 0 1px 1px rgb(20 45 61 / 0.04);
+  --shadow-pop: 0 12px 28px -8px rgb(20 45 61 / 0.16), 0 2px 6px rgb(20 45 61 / 0.08);
+
+  /* Motion. One calm "standard" curve everywhere — no spring/overshoot
+     anywhere in the app, per the no-bouncy-motion direction. */
   --ease-out-soft: cubic-bezier(0.22, 0.61, 0.36, 1);
-  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
 
-  --animate-rise: rise 0.42s var(--ease-out-soft) both;
-  --animate-fade: fade 0.3s var(--ease-out-soft) both;
-  --animate-sheet: sheet 0.34s var(--ease-out-soft) both;
-  --animate-backdrop: backdrop 0.28s var(--ease-out-soft) both;
+  --animate-rise: rise 0.22s var(--ease-out-soft) both;
+  --animate-fade: fade 0.18s var(--ease-out-soft) both;
+  --animate-sheet: sheet 0.22s var(--ease-out-soft) both;
+  --animate-backdrop: backdrop 0.18s var(--ease-out-soft) both;
+  /* Live-indicator "heartbeat" — opacity only, no scale/glow, so it reads as
+     a calm live-data cue rather than a decorative pulse. */
   --animate-breathe: breathe 2.6s ease-in-out infinite;
-  --animate-shimmer: shimmer 2.4s linear infinite;
-  --animate-pop: pop 0.34s var(--ease-spring) both;
-  /* Unused by any component right now (TankGraphic's water surface is the
-     masked PNG artwork's own shimmer sweep instead) — kept as reusable
-     building blocks for any future drifting-surface effect. */
-  --animate-wave: wave 7s linear infinite;
-  --animate-wave-slow: wave-slow 11s linear infinite;
 
   @keyframes rise {
-    from { opacity: 0; transform: translate3d(0, 10px, 0); }
+    from { opacity: 0; transform: translate3d(0, 6px, 0); }
     to   { opacity: 1; transform: none; }
   }
   @keyframes fade {
@@ -71,36 +75,16 @@
     to   { opacity: 1; }
   }
   @keyframes sheet {
-    from { transform: translate3d(0, 100%, 0); }
-    to   { transform: none; }
+    from { opacity: 0; transform: translate3d(0, 12px, 0) scale(0.98); }
+    to   { opacity: 1; transform: none; }
   }
   @keyframes backdrop {
     from { opacity: 0; }
     to   { opacity: 1; }
   }
-  /* Live-indicator "heartbeat" — scale change is deliberately tiny; the glow
-     does the communicating so it stays legible at a 10px dot. */
   @keyframes breathe {
-    0%, 100% { opacity: 1;    transform: scale(1); }
-    50%      { opacity: 0.72; transform: scale(0.9); }
-  }
-  @keyframes shimmer {
-    from { transform: translateX(-100%); }
-    to   { transform: translateX(200%); }
-  }
-  @keyframes pop {
-    from { opacity: 0; transform: scale(0.86); }
-    to   { opacity: 1; transform: scale(1); }
-  }
-  /* Translate distance must equal one tile of the wave path (80 user units)
-     so the loop is seamless, should this be reused for an SVG wave again. */
-  @keyframes wave {
-    from { transform: translateX(0); }
-    to   { transform: translateX(-80px); }
-  }
-  @keyframes wave-slow {
-    from { transform: translateX(-80px); }
-    to   { transform: translateX(0); }
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.55; }
   }
 }
 
@@ -114,12 +98,13 @@
   body {
     background-color: var(--color-bg);
     color: var(--color-content);
+    /* Android's system sans-serif *is* Roboto; naming it explicitly (rather
+       than leaving the platform default implicit) keeps metrics identical
+       there while still degrading sensibly in a desktop browser preview. */
+    font-family: "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
-    /* Tightened tracking app-wide — the platform UI faces (SF/Roboto) are
-       drawn for tighter optical spacing than the browser default at these
-       sizes, and it's most of what separates "app" from "web page". */
-    letter-spacing: -0.011em;
+    letter-spacing: -0.006em;
     /* Respect Android/iOS safe areas (viewport-fit=cover in index.html). */
     padding: env(safe-area-inset-top) env(safe-area-inset-right)
       env(safe-area-inset-bottom) env(safe-area-inset-left);
@@ -131,10 +116,8 @@
     overscroll-behavior-y: none;
   }
 
-  /* Large text needs proportionally less tracking than body copy to look
-     optically even. */
   h1, h2, h3 {
-    letter-spacing: -0.022em;
+    letter-spacing: -0.012em;
   }
 
   /* Tabular figures for live-updating readouts, so numbers don't jitter
@@ -146,6 +129,14 @@
 
   button {
     -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Every interactive control gets the same visible focus treatment (screen
+     readers / keyboard / D-pad), rather than the browser's default blue ring
+     clashing with the palette. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -160,69 +151,68 @@
 }
 
 @layer components {
-  /* Hairline top-edge highlight — makes a flat card read as a physical, lit
-     surface. Used on every elevated container. */
+  /* Type hierarchy — shared tokens so every screen sizes/weights the same
+     kind of content identically instead of ad hoc arbitrary values.
+       title:   page titles (24–28sp / medium)
+       reading: the single most important number on a screen or card
+                (30–38sp / medium, tabular)
+       heading: component/section headings (16–18sp / medium)
+       label:   supporting labels — units, timestamps, eyebrows (12–13sp) */
+  .type-title {
+    font-size: 1.625rem; /* 26sp */
+    font-weight: 500;
+    letter-spacing: -0.012em;
+  }
+  .type-reading {
+    font-size: 2rem; /* 32sp */
+    font-weight: 500;
+    letter-spacing: -0.016em;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+  .type-heading {
+    font-size: 1.0625rem; /* 17sp */
+    font-weight: 500;
+  }
+  .type-label {
+    font-size: 0.75rem; /* 12sp */
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+
+  /* Minimal elevation: a hairline border carries the shape, the shadow just
+     lifts a white card a little off the off-white page. No inner highlight
+     gradient — that trick only reads on a dark surface. */
   .surface-lift {
-    position: relative;
     box-shadow: var(--shadow-card);
   }
-  .surface-lift::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: linear-gradient(
-      to bottom,
-      rgb(255 255 255 / 0.06),
-      transparent 40%
-    );
-    pointer-events: none;
-  }
 
-  /* Ambient aqua wash behind the whole app. Anchored top-centre so it reads
-     as light falling onto the screen from above, not as a gradient wallpaper. */
-  .app-ambient {
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 0;
-    background:
-      radial-gradient(
-        90% 46% at 50% -8%,
-        color-mix(in srgb, var(--color-brand) 15%, transparent),
-        transparent 70%
-      ),
-      radial-gradient(
-        70% 38% at 88% 6%,
-        color-mix(in srgb, var(--color-good) 5%, transparent),
-        transparent 65%
-      );
-  }
-
-  /* Press affordance for tappable things that aren't a <Button>. */
+  /* Press affordance for tappable things that aren't a <Button>. Small and
+     quick (spec: ~100–150ms) — a nudge, not a bounce. */
   .press {
     transition:
-      transform 0.16s var(--ease-out-soft),
-      opacity 0.16s var(--ease-out-soft),
-      background-color 0.2s var(--ease-out-soft);
+      transform 0.12s var(--ease-standard),
+      opacity 0.12s var(--ease-standard),
+      background-color 0.15s var(--ease-standard);
   }
   .press:active {
-    transform: scale(0.97);
-    opacity: 0.9;
+    transform: scale(0.98);
+    opacity: 0.85;
   }
 
-  /* Staggered entrance for a screen's top-level sections. Capped at 8 so a
-     long list doesn't crawl in for a full second. */
+  /* Gentle entrance for a screen's top-level sections on navigation — brief
+     and restrained, never delays interaction. Capped at 8 so a long list
+     doesn't crawl in for a full second. */
   .stagger > * {
     animation: var(--animate-rise);
   }
-  .stagger > *:nth-child(1) { animation-delay: 0.02s; }
-  .stagger > *:nth-child(2) { animation-delay: 0.06s; }
-  .stagger > *:nth-child(3) { animation-delay: 0.10s; }
-  .stagger > *:nth-child(4) { animation-delay: 0.14s; }
-  .stagger > *:nth-child(5) { animation-delay: 0.18s; }
-  .stagger > *:nth-child(6) { animation-delay: 0.22s; }
-  .stagger > *:nth-child(7) { animation-delay: 0.26s; }
-  .stagger > *:nth-child(n + 8) { animation-delay: 0.3s; }
+  .stagger > *:nth-child(1) { animation-delay: 0.01s; }
+  .stagger > *:nth-child(2) { animation-delay: 0.03s; }
+  .stagger > *:nth-child(3) { animation-delay: 0.05s; }
+  .stagger > *:nth-child(4) { animation-delay: 0.07s; }
+  .stagger > *:nth-child(5) { animation-delay: 0.09s; }
+  .stagger > *:nth-child(6) { animation-delay: 0.11s; }
+  .stagger > *:nth-child(7) { animation-delay: 0.13s; }
+  .stagger > *:nth-child(n + 8) { animation-delay: 0.15s; }
 }
 

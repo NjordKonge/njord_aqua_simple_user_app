@@ -71,16 +71,6 @@ export function TankGraphic({
   return (
     <div className="flex h-full w-full flex-col items-center">
       <div className="relative w-full min-h-0 flex-1">
-        {/* Ambient bloom behind the tank, tinted by fill state. */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 -z-10 transition-opacity duration-700"
-          style={{
-            opacity: showWater ? 1 : 0,
-            background: `radial-gradient(55% 55% at 50% 65%, color-mix(in srgb, ${fillColor} 30%, transparent), transparent 72%)`,
-          }}
-        />
-
         {/* Locked to the artwork's own aspect ratio and centered — mirrors
             exactly how object-contain/mask-size:contain place the image
             within a differently-shaped outer box, so every clip-path below
@@ -95,11 +85,13 @@ export function TankGraphic({
             src={TANK_IMAGE_SRC}
             alt="Water tank"
             className="absolute inset-0 h-full w-full object-contain transition-opacity duration-700"
-            style={{ opacity: showWater ? 0.4 : 0.75, filter: "grayscale(1) brightness(1.6)" }}
+            style={{ opacity: showWater ? 0.35 : 0.6, filter: "grayscale(1) brightness(1.3)" }}
           />
 
           {/* Coloured fill: same artwork, masked to its own ink, clipped from
-              the top so only the bottom `clamped`% is revealed. */}
+              the top so only the bottom `clamped`% is revealed. The clip
+              transition is the only "water motion" — brief and tied to an
+              actual level update, not a looping effect. */}
           <div
             aria-hidden
             className="absolute inset-0 overflow-hidden transition-[clip-path] duration-700 ease-[var(--ease-out-soft)]"
@@ -109,29 +101,15 @@ export function TankGraphic({
               className="relative h-full w-full transition-opacity duration-700"
               style={{ opacity: showWater ? 1 : 0, ...maskStyle }}
             >
-              <div
-                className="absolute inset-0"
-                style={{
-                  backgroundImage: `linear-gradient(180deg, color-mix(in srgb, ${fillColor} 90%, white), ${fillColor} 45%, color-mix(in srgb, var(--color-brand-deep) 80%, black))`,
-                  filter: `drop-shadow(0 0 10px color-mix(in srgb, ${fillColor} 55%, transparent))`,
-                }}
-              />
-              {/* Light sweeping across the fill so it reads as liquid, not a
-                  flat tint. */}
-              <div
-                className="absolute inset-0 w-[60%] animate-shimmer"
-                style={{
-                  backgroundImage:
-                    "linear-gradient(115deg, transparent 30%, rgb(255 255 255 / 0.45) 50%, transparent 70%)",
-                }}
-              />
+              <div className="absolute inset-0" style={{ backgroundColor: fillColor }} />
             </div>
           </div>
 
           {/* Drop-in electrolysis probe: same artwork masked to its own ink
               again, but clipped to a FIXED box around just the probe capsule
-              (not the water level) — tinted green and pulsing while the
-              electrode is actively being driven right now. */}
+              (not the water level) — tinted green while the electrode is
+              actively being driven right now. A gentle opacity heartbeat
+              (no glow, no scale) marks it as live rather than a static tint. */}
           <div
             aria-hidden
             className="absolute inset-0 overflow-hidden"
@@ -144,19 +122,13 @@ export function TankGraphic({
               )}
               style={{ opacity: electrolysisOn ? 1 : 0, ...maskStyle }}
             >
-              <div
-                className="absolute inset-0"
-                style={{
-                  backgroundColor: "var(--color-good)",
-                  filter: "drop-shadow(0 0 8px var(--color-good))",
-                }}
-              />
+              <div className="absolute inset-0" style={{ backgroundColor: "var(--color-good)" }} />
             </div>
           </div>
         </div>
       </div>
 
-      <p className={cn("tnum mt-2 shrink-0 text-sm font-semibold", low ? "text-warn" : "text-content")}>
+      <p className={cn("tnum mt-2 shrink-0 text-sm font-medium", low ? "text-warn" : "text-content")}>
         {hasReading && liters !== null
           ? `${Math.round(liters)}L of ${capacityLiters}L`
           : "Level unknown"}

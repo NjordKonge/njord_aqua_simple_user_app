@@ -34,7 +34,7 @@ export function MiniBarChart({
     <div className="surface-lift rounded-card border border-border-soft bg-surface p-3">
       <div className="flex" style={{ height }}>
         {/* Y-axis labels */}
-        <div className="tnum flex flex-col justify-between pr-2 text-right text-[9.5px] text-faint">
+        <div className="tnum flex flex-col justify-between pr-2 text-right text-[10.5px] text-faint">
           {gridValues
             .slice()
             .reverse()
@@ -63,16 +63,7 @@ export function MiniBarChart({
                   "w-full rounded-t-[3px] transition-[height] duration-500 ease-[var(--ease-out-soft)]",
                   d.highlight ? "bg-brand" : "bg-surface-muted",
                 )}
-                style={{
-                  height: `${(d.value / max) * 100}%`,
-                  minHeight: 2,
-                  backgroundImage: d.highlight
-                    ? "linear-gradient(to top, var(--color-brand-deep), var(--color-brand))"
-                    : "linear-gradient(to top, var(--color-surface-muted), var(--color-surface-raised))",
-                  boxShadow: d.highlight
-                    ? "0 0 12px color-mix(in oklab, var(--color-brand) 45%, transparent)"
-                    : undefined,
-                }}
+                style={{ height: `${(d.value / max) * 100}%`, minHeight: 2 }}
               />
             </button>
           ))}
@@ -85,7 +76,7 @@ export function MiniBarChart({
           <span
             key={i}
             className={cn(
-              "flex-1 text-center text-[9.5px]",
+              "flex-1 text-center text-[10.5px]",
               d.highlight ? "font-medium text-brand" : "text-faint",
             )}
           >

@@ -22,8 +22,7 @@ function RootLayout() {
   const [splashVisible, setSplashVisible] = useState(true);
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden">
-      <div className="app-ambient" aria-hidden />
+    <div className="relative flex h-full flex-col overflow-hidden bg-bg">
       <main
         key={pathname}
         className="relative z-10 flex-1 overflow-y-auto px-5 pb-8 pt-8"
@@ -64,17 +63,14 @@ function SplashScreen({ onDone }: { onDone: () => void }) {
       )}
       aria-hidden={leaving}
     >
-      <div className="app-ambient" aria-hidden />
       <img
         src="/njord-logo-white.png"
         alt="Njord Aqua"
-        className="relative z-10 w-36 animate-rise"
-        style={{
-          filter: "drop-shadow(0 6px 28px color-mix(in oklab, var(--color-brand) 50%, transparent))",
-        }}
+        className="relative z-10 w-32 animate-rise"
+        style={{ filter: "brightness(0)", opacity: 0.86 }}
       />
       <p
-        className="relative z-10 animate-fade text-center text-[0.8125rem] font-medium tracking-[0.24em] text-faint"
+        className="relative z-10 animate-fade text-center text-[0.8125rem] font-medium tracking-[0.2em] text-faint"
         style={{ animationDelay: "150ms", animationFillMode: "backwards" }}
       >
         Easier, Cleaner, Safer, More

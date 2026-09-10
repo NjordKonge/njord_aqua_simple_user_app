@@ -134,7 +134,7 @@ function HomeScreen() {
 
       <div className="flex items-baseline justify-between">
         <p className="text-sm text-muted">Overview of Tank 1</p>
-        <p className="text-[0.6875rem] tracking-wide text-faint">{BUILD_TAG}</p>
+        <p className="type-label text-faint">{BUILD_TAG}</p>
       </div>
 
       <StatusRow
@@ -160,11 +160,11 @@ function HomeScreen() {
             electrolysisOn={electrolysisOn}
           />
         </div>
-        <p className="mt-3 shrink-0 text-sm font-semibold">{name}</p>
+        <p className="mt-3 shrink-0 type-heading">{name}</p>
         <span
           className={cn(
-            "mt-1 inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[0.6875rem] font-medium",
-            device.online ? "bg-good/12 text-good" : "bg-bad/12 text-bad",
+            "mt-1 inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 type-label",
+            device.online ? "bg-good/10 text-good" : "bg-bad/10 text-bad",
           )}
         >
           <span
@@ -230,18 +230,11 @@ function HomeScreen() {
       />
 
       {attention.length > 0 ? (
-        <div
-          className="surface-lift space-y-2 rounded-card border border-border-soft bg-surface p-4"
-          style={{
-            backgroundImage:
-              "linear-gradient(100deg, color-mix(in srgb, var(--color-warn) 10%, transparent), transparent 55%)",
-          }}
-        >
-          <p className="text-[0.6875rem] font-medium uppercase tracking-wider text-warn">
-            Needs attention
-          </p>
+        <div className="surface-lift relative space-y-2 overflow-hidden rounded-card border border-border-soft bg-surface py-4 pl-[1.125rem] pr-4">
+          <span aria-hidden className="absolute inset-y-3 left-0 w-[3px] rounded-full bg-warn" />
+          <p className="type-label uppercase tracking-wider text-warn">Needs attention</p>
           {attention.map((message) => (
-            <p key={message} className="text-sm leading-snug">
+            <p key={message} className="text-sm leading-snug text-content">
               {message}
             </p>
           ))}
@@ -324,14 +317,14 @@ function Metric({
 }) {
   return (
     <div className="surface-lift rounded-card border border-border-soft bg-surface p-4">
-      <div className="flex items-center gap-2 text-faint">
-        <Icon size={15} strokeWidth={2.1} />
-        <span className="text-[0.6875rem] font-medium uppercase tracking-wider">{label}</span>
+      <div className="flex items-center gap-1.5 text-faint">
+        <Icon size={14} strokeWidth={2.1} />
+        <span className="type-label uppercase tracking-wider">{label}</span>
       </div>
       <p
         className={cn(
-          "tnum mt-1.5 text-[1.375rem] font-semibold leading-tight",
-          muted && "text-muted text-sm font-normal",
+          "tnum mt-1.5 text-[1.75rem] font-medium leading-tight tracking-tight",
+          muted && "text-sm font-normal text-muted",
         )}
       >
         {value}
@@ -361,23 +354,15 @@ function LiveElectrolysisStatus({
   state: "on" | "waiting" | "off";
 }) {
   const effective = online ? state : "off";
-  const color = effective === "on" ? "good" : effective === "waiting" ? "warn" : "bad";
   const text = !online ? "—" : effective === "on" ? "On" : effective === "waiting" ? "Done for cycle" : "Off";
 
   return (
-    <div
-      className="surface-lift flex items-center gap-2.5 rounded-card border border-border-soft bg-surface px-3.5 py-3 transition-all duration-500"
-      style={{
-        backgroundImage: `linear-gradient(100deg, color-mix(in srgb, var(--color-${color}) 12%, transparent), transparent 50%)`,
-      }}
-    >
+    <div className="surface-lift flex items-center gap-2.5 rounded-card border border-border-soft bg-surface px-3.5 py-3">
       <Led state={effective} />
-      <span className="text-[0.6875rem] font-medium uppercase tracking-wider text-muted">
-        Live electrolysis status
-      </span>
+      <span className="type-label uppercase tracking-wider text-muted">Live electrolysis status</span>
       <span
         className={cn(
-          "ml-auto text-[0.6875rem] font-semibold uppercase tracking-wider transition-colors duration-500",
+          "ml-auto type-label uppercase tracking-wider font-semibold transition-colors duration-300",
           effective === "on" && "text-good",
           effective === "waiting" && "text-warn",
           effective === "off" && "text-bad",
@@ -396,18 +381,11 @@ function Led({ state }: { state: "on" | "waiting" | "off" }) {
     <span className="relative flex h-2.5 w-2.5 shrink-0 items-center justify-center">
       <span
         className={cn(
-          "h-2.5 w-2.5 rounded-full transition-colors duration-500",
+          "h-2.5 w-2.5 rounded-full transition-colors duration-300",
           state === "on" && "animate-breathe bg-good",
           state === "waiting" && "bg-warn",
           state === "off" && "bg-bad",
         )}
-        style={
-          state === "on"
-            ? { boxShadow: "0 0 0 3px color-mix(in srgb, var(--color-good) 18%, transparent), 0 0 14px var(--color-good)" }
-            : state === "waiting"
-              ? { boxShadow: "0 0 0 3px color-mix(in srgb, var(--color-warn) 18%, transparent), 0 0 10px var(--color-warn)" }
-              : { boxShadow: "0 0 0 3px color-mix(in srgb, var(--color-bad) 18%, transparent), 0 0 10px var(--color-bad)" }
-        }
       />
     </span>
   );
@@ -429,16 +407,18 @@ function DosingModeToggle({
   // Static lookup (never build Tailwind class names via template literals —
   // the JIT scanner won't pick them up).
   const SELECTED_TEXT: Record<DosingMode, string> = {
-    off: "text-content",
-    normal: "text-bg",
-    high: "text-content",
+    off: "text-on-fill",
+    normal: "text-on-fill",
+    high: "text-on-fill",
   };
-  // CSS colour expressions for the sliding thumb — these feed gradients and
-  // shadows, so they can't be Tailwind classes.
+  // CSS colour expressions for the sliding thumb — flat fill, no gradient.
+  // "High" uses the restrained accent colour rather than a second shade of
+  // green, since off/normal already carry the real bad/good device-state
+  // meaning and high is just a stronger selection of the same "good" state.
   const THUMB_COLOR: Record<DosingMode, string> = {
     off: "var(--color-bad)",
     normal: "var(--color-good)",
-    high: "var(--color-good-strong)",
+    high: "var(--color-accent)",
   };
 
   const activeIndex = Math.max(0, options.findIndex((o) => o.value === mode));
@@ -452,12 +432,11 @@ function DosingModeToggle({
     <div className="surface-lift relative grid grid-cols-3 gap-2 rounded-card border border-border-soft bg-surface-muted p-1">
       <span
         aria-hidden
-        className="absolute inset-y-1 left-1 rounded-[calc(var(--radius-card)-0.25rem)] transition-all duration-[350ms] ease-[var(--ease-spring)]"
+        className="absolute inset-y-1 left-1 rounded-[calc(var(--radius-card)-0.25rem)] transition-all duration-200 ease-[var(--ease-standard)]"
         style={{
           width: `calc((100% - 0.5rem) / 3)`,
           transform: `translateX(${activeIndex * 100}%)`,
-          backgroundImage: `linear-gradient(to bottom, color-mix(in srgb, ${thumb} 88%, white), ${thumb})`,
-          boxShadow: `0 1px 0 rgb(255 255 255 / 0.16) inset, 0 6px 16px -8px ${thumb}`,
+          backgroundColor: thumb,
         }}
       />
       {options.map((opt) => (
@@ -465,8 +444,8 @@ function DosingModeToggle({
           key={opt.value}
           onClick={() => onChange(opt.value)}
           className={cn(
-            "relative rounded-card px-3 py-3 text-sm font-semibold transition-colors duration-200",
-            "active:scale-[0.97] transition-transform",
+            "relative rounded-card px-3 py-3 text-sm font-medium transition-colors duration-150",
+            "active:scale-[0.98] transition-transform",
             opt.value === mode ? SELECTED_TEXT[opt.value] : "text-muted",
           )}
         >

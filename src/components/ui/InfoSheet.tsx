@@ -37,21 +37,21 @@ export function InfoSheet({
     <div className="fixed inset-0 z-50 flex items-end">
       <button
         aria-label="Close"
-        className="absolute inset-0 animate-backdrop bg-black/70 backdrop-blur-sm"
+        className="absolute inset-0 animate-backdrop bg-[#142d3d]/45"
         onClick={onClose}
       />
       <div
-        className="surface-lift relative w-full animate-sheet rounded-t-card border-t border-white/8 bg-surface px-6 pb-9 pt-3"
+        className="surface-lift relative w-full animate-sheet rounded-t-card border-t border-border-soft bg-surface px-6 pb-9 pt-3"
         style={{ boxShadow: "var(--shadow-pop)" }}
       >
         {/* Grab handle */}
-        <div aria-hidden className="mx-auto mb-4 h-1 w-9 rounded-full bg-faint/60" />
+        <div aria-hidden className="mx-auto mb-4 h-1 w-9 rounded-full bg-border" />
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{title}</h2>
+          <h2 className="type-heading">{title}</h2>
           <button
             aria-label="Close"
             onClick={onClose}
-            className="press -mr-1 rounded-full p-1.5 text-muted"
+            className="press -mr-1 flex h-9 w-9 items-center justify-center rounded-full text-muted"
           >
             <X size={20} />
           </button>
