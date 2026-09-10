@@ -149,7 +149,12 @@ function HomeScreen() {
           screen width and whatever height the metrics stack happened to be,
           which was never "large". A dedicated section lets it be as big as
           the screen reasonably allows. */}
-      <div className="surface-lift flex flex-col items-center rounded-card border border-border-soft bg-surface p-4">
+      {/* Dark-blue backdrop, not the usual white card: the tank artwork
+          itself is white line-art on a transparent PNG (designed to sit on
+          a dark surface), so a white card made it unreadable — "white on
+          white". brand-deep gives it back the contrast it needs, for both
+          the outline and the coloured fill level. */}
+      <div className="surface-lift flex flex-col items-center rounded-card border border-white/10 bg-brand-deep p-4">
         <div className="h-72 w-full">
           <TankGraphic
             percent={tank.percent}
@@ -160,11 +165,11 @@ function HomeScreen() {
             electrolysisOn={electrolysisOn}
           />
         </div>
-        <p className="mt-3 shrink-0 type-heading">{name}</p>
+        <p className="mt-3 shrink-0 type-heading text-on-fill">{name}</p>
         <span
           className={cn(
             "mt-1 inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 type-label",
-            device.online ? "bg-good/10 text-good" : "bg-bad/10 text-bad",
+            device.online ? "bg-good/20 text-good" : "bg-bad/20 text-bad",
           )}
         >
           <span

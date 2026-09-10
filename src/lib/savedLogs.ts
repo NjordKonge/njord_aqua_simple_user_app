@@ -111,7 +111,11 @@ export function archiveSavedLog(input: {
     entryCount: input.entryCount,
     csv: input.csv,
   };
-  write([rec, ...read()]);
+  // Every Overview visit/range-switch/reconnect can trigger a fresh flash-log
+  // download, and each one used to be archived as a new entry — with no UI
+  // to browse or prune them, that grew localStorage unboundedly. Only the
+  // single latest log per device is kept: replace, don't accumulate.
+  write([rec, ...read().filter((l) => l.deviceId !== input.deviceId)]);
   return rec;
 }
 

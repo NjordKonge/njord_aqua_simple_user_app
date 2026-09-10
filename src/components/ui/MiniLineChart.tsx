@@ -104,8 +104,18 @@ export function MiniLineChart({
 
   const active = activeIndex !== null ? xy[activeIndex] : null;
   const activeSample = activeIndex !== null ? data[activeIndex] : null;
+  // Firmware timestamps are UTC (see NJORD_EPOCH_OFFSET / logCsv.ts's
+  // ts_iso column, which is also UTC), so the drag tooltip must be explicit
+  // about that too — a bare `toLocaleTimeString()` silently rendered the
+  // phone's local timezone instead, which could disagree with every other
+  // UTC-stamped timestamp in the app (e.g. an exported CSV) by hours.
   const defaultFormatTime = (t: number) =>
-    new Date(t).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    `${new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: "UTC",
+    }).format(new Date(t))} UTC`;
   const timeLabel = activeSample ? (formatTime ?? defaultFormatTime)(activeSample.t) : "";
 
   // Tooltip box, clamped so it never runs off either edge, and lifted above

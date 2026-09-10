@@ -53,7 +53,12 @@ export function TankGraphic({
   electrolysisOn: boolean;
 }) {
   const clamped = percent === null ? 0 : Math.max(0, Math.min(100, percent));
-  const fillColor = low ? "var(--color-warn)" : "var(--color-brand)";
+  // The card behind this artwork is dark (brand-deep, #0f4c68 — see
+  // index.tsx) so the water fill needs its own brighter tint: the ordinary
+  // --color-brand is too close in lightness to brand-deep to read clearly
+  // against it (contrast ratio ~1.4:1). This lighter sky-blue keeps a
+  // "water" hue while giving a real ~3.9:1 contrast against the backdrop.
+  const fillColor = low ? "var(--color-warn)" : "#4fb3d9";
   const showWater = hasReading && clamped > 0;
   // Reveal the bottom `clamped`% by clipping away the top (100 - clamped)%.
   const clipInset = `${100 - clamped}% 0 0 0`;
@@ -128,7 +133,7 @@ export function TankGraphic({
         </div>
       </div>
 
-      <p className={cn("tnum mt-2 shrink-0 text-sm font-medium", low ? "text-warn" : "text-content")}>
+      <p className={cn("tnum mt-2 shrink-0 text-sm font-medium", low ? "text-warn" : "text-on-fill")}>
         {hasReading && liters !== null
           ? `${Math.round(liters)}L of ${capacityLiters}L`
           : "Level unknown"}
