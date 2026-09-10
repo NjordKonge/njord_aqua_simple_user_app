@@ -10,7 +10,7 @@ import {
   useMergedSonar,
   RANGE_WINDOW_MS,
   RANGE_SHORT_LABEL,
-  chartAxisLabels,
+  chartAxisTicks,
   formatRelativeAgo,
   type HistoryRange,
 } from "@/lib/device/history";
@@ -89,14 +89,16 @@ function OverviewScreen() {
     [mergedSonar],
   );
 
-  // Axis labels are derived from whatever is ACTUALLY plotted, not the
+  // Axis ticks are derived from whatever is ACTUALLY plotted, not the
   // nominal requested window — a chart with only 3h of real samples must
   // say "3h ago", never "24h ago" just because the Daily tab is selected.
-  const tempLabels = chartAxisLabels(tempSeries);
-  const tankLabels = chartAxisLabels(recentSonar);
-  const voltLabels = chartAxisLabels(voltSeries);
-  const ampLabels = chartAxisLabels(ampSeries);
-  const wattLabels = chartAxisLabels(wattSeries);
+  // Evenly time-spaced (not evenly sample-spaced), matching the chart's
+  // linear time axis.
+  const tempTicks = chartAxisTicks(tempSeries);
+  const tankTicks = chartAxisTicks(recentSonar);
+  const voltTicks = chartAxisTicks(voltSeries);
+  const ampTicks = chartAxisTicks(ampSeries);
+  const wattTicks = chartAxisTicks(wattSeries);
 
 
   return (
@@ -195,8 +197,7 @@ function OverviewScreen() {
         <MiniLineChart
           data={tempSeries}
           unit="°C"
-          xStartLabel={tempLabels.start}
-          xEndLabel={tempLabels.end}
+          xTicks={tempTicks}
           emptyLabel={historyLoading ? "Loading device history…" : "No data yet"}
         />
       </section>
@@ -208,8 +209,7 @@ function OverviewScreen() {
         <MiniLineChart
           data={recentSonar}
           unit="mm"
-          xStartLabel={tankLabels.start}
-          xEndLabel={tankLabels.end}
+          xTicks={tankTicks}
           emptyLabel={historyLoading ? "Loading device history…" : "No sonar readings taken yet"}
         />
       </section>
@@ -221,8 +221,7 @@ function OverviewScreen() {
         <MiniLineChart
           data={voltSeries}
           unit="V"
-          xStartLabel={voltLabels.start}
-          xEndLabel={voltLabels.end}
+          xTicks={voltTicks}
           emptyLabel={historyLoading ? "Loading device history…" : "No data yet"}
         />
       </section>
@@ -234,8 +233,7 @@ function OverviewScreen() {
         <MiniLineChart
           data={ampSeries}
           unit="mA"
-          xStartLabel={ampLabels.start}
-          xEndLabel={ampLabels.end}
+          xTicks={ampTicks}
           emptyLabel={historyLoading ? "Loading device history…" : "No data yet"}
         />
       </section>
@@ -247,8 +245,7 @@ function OverviewScreen() {
         <MiniLineChart
           data={wattSeries}
           unit="W"
-          xStartLabel={wattLabels.start}
-          xEndLabel={wattLabels.end}
+          xTicks={wattTicks}
           emptyLabel={historyLoading ? "Loading device history…" : "No data yet"}
         />
       </section>

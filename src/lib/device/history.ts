@@ -69,15 +69,35 @@ export function formatRelativeAgo(ms: number): string {
   return `${weeks}w ago`;
 }
 
-/** X-axis start/end labels for a chart series, derived from the samples
- *  actually being drawn (not the requested range) so they can never claim
- *  the chart reaches further back — or more recent — than it really does. */
-export function chartAxisLabels(series: Array<{ t: number }>): { start: string; end: string } {
-  if (series.length === 0) return { start: "", end: "" };
-  const start = formatRelativeAgo(series[0].t);
-  const lastT = series[series.length - 1].t;
-  const end = Date.now() - lastT < 120_000 ? "now" : formatRelativeAgo(lastT);
-  return { start, end };
+/** A single labeled position along a chart's x-axis. `frac` is 0..1 along
+ *  the plotted time span (0 = oldest sample, 1 = newest) — the caller
+ *  positions it linearly (`frac * plotWidth`) so ticks always line up with
+ *  where that instant actually falls on the (time-linear) x-axis, rather
+ *  than being spaced evenly by sample index. */
+export interface ChartTick {
+  frac: number;
+  label: string;
+}
+
+/** Evenly-time-spaced x-axis tick labels (start, `count - 2` intermediate
+ *  points, end) for a chart series, derived from the samples actually being
+ *  drawn (not the requested range) so they can never claim the chart
+ *  reaches further back — or more recent — than it really does. Each tick's
+ *  label reflects the exact interpolated instant at its position, so the
+ *  labels stay honest about the (linear) time axis even when samples
+ *  themselves are unevenly spaced. */
+export function chartAxisTicks(series: Array<{ t: number }>, count = 4): ChartTick[] {
+  if (series.length === 0) return [];
+  const tMin = series[0].t;
+  const tMax = series[series.length - 1].t;
+  const span = tMax - tMin;
+  const n = Math.max(2, count);
+  return Array.from({ length: n }, (_, i) => {
+    const frac = i / (n - 1);
+    const t = tMin + frac * span;
+    const label = frac === 1 && Date.now() - t < 120_000 ? "now" : formatRelativeAgo(t);
+    return { frac, label };
+  });
 }
 
 /** Host `Date.now()`-style ms → device wire epoch (whole seconds since

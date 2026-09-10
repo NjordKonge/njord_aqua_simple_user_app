@@ -15,8 +15,7 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 export function MiniLineChart({
   data,
   unit,
-  xStartLabel,
-  xEndLabel,
+  xTicks,
   height = 140,
   emptyLabel = "No data yet",
   color = "var(--color-brand)",
@@ -24,8 +23,11 @@ export function MiniLineChart({
 }: {
   data: Array<{ t: number; v: number }>;
   unit: string;
-  xStartLabel: string;
-  xEndLabel: string;
+  /** Evenly time-spaced x-axis labels (see `chartAxisTicks` in
+   *  lib/device/history.ts) — `frac` (0..1) is positioned linearly along the
+   *  plotted time span so each label lines up with the instant it actually
+   *  describes on the (time-linear) x-axis. */
+  xTicks: Array<{ frac: number; label: string }>;
   height?: number;
   emptyLabel?: string;
   /** Trace/area/dot color — CSS color value. Lets each chart on a page read
@@ -172,13 +174,39 @@ export function MiniLineChart({
         {/* Latest sample */}
         <circle cx={last.x} cy={last.y} r="2.5" fill={color} stroke="var(--color-surface)" strokeWidth="1.5" />
 
-        {/* X start/end labels */}
-        <text x={padLeft} y={height + 14} fontSize="10.5" fill="var(--color-faint)">
-          {xStartLabel}
-        </text>
-        <text x={width} y={height + 14} fontSize="10.5" fill="var(--color-faint)" textAnchor="end">
-          {xEndLabel}
-        </text>
+        {/* X-axis: faint gridlines + evenly time-spaced labels. Positioned
+            by `frac * plotW`, matching exactly how samples themselves are
+            placed (`x = padLeft + ((t - tMin) / tSpan) * plotW`), so the
+            ticks are guaranteed to line up with the linear time axis. */}
+        {xTicks.map((tick, i) => {
+          const x = padLeft + tick.frac * plotW;
+          const isFirst = i === 0;
+          const isLast = i === xTicks.length - 1;
+          return (
+            <g key={i}>
+              {!isFirst && !isLast && (
+                <line
+                  x1={x}
+                  x2={x}
+                  y1={padTop}
+                  y2={baseline}
+                  stroke="var(--color-border)"
+                  strokeWidth="1"
+                  strokeDasharray="2 3"
+                />
+              )}
+              <text
+                x={x}
+                y={height + 14}
+                fontSize="10.5"
+                fill="var(--color-faint)"
+                textAnchor={isFirst ? "start" : isLast ? "end" : "middle"}
+              >
+                {tick.label}
+              </text>
+            </g>
+          );
+        })}
 
         {/* Drag/touch crosshair + tooltip for the nearest sample. */}
         {active && activeSample && (
