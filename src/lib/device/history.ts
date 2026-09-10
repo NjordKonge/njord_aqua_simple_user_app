@@ -9,17 +9,27 @@
  * samples, i.e. minutes, not days) — so closing the app for a day and
  * reopening it showed almost nothing.
  *
- * `useHistoryLog` triggers a ranged `start_log_download` (STARTLOGDL with
- * from_ts/to_ts) for the selected range and reads the parsed result back
- * from the store's `logs[deviceId]` (populated by store.ts's LogData chunk
- * reassembly). Downloads are cheap to skip-repeat: a module-level
- * timestamp cache avoids re-requesting the same device+range more than
- * once a minute, so revisiting the Overview tab doesn't re-download the
- * whole window every time.
+ * `useHistoryLog` exposes a `refresh()` that triggers a ranged
+ * `start_log_download` (STARTLOGDL with from_ts/to_ts) for the selected
+ * range and reads the parsed result back from the store's `logs[deviceId]`
+ * (populated by store.ts's LogData chunk reassembly). Downloads only ever
+ * happen when `refresh()` is called explicitly (e.g. the "Load history"
+ * button) — there is deliberately no automatic fetch on mount/range change,
+ * so opening the Overview screen never itself triggers a BLE transfer.
+ *
+ * Two independent failure modes are surfaced via `error`:
+ *  - The STARTLOGDL command itself can fail fast (device not connected,
+ *    malformed request) or never get acknowledged at all (5 s response
+ *    timeout in store.ts's `sendCommand`) — reflected in the returned
+ *    `CommandEntry`'s `status`/`error`.
+ *  - The command can be ack'd fine but the chunked transfer that follows
+ *    can then stall (BLE glitch, firmware hiccup) or the link can drop —
+ *    reflected in `logProgress[id].cancelled`/`.error` (see store.ts's
+ *    watchdog `LOG_STALL_MS` check and `abortInFlightLogProgress`).
  */
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { NJORD_EPOCH_OFFSET } from "./types";
-import type { LogEntry, TelemetryLogEntry, TelemetrySample, SonarLogEntry } from "./types";
+import type { LogEntry, TelemetryLogEntry, TelemetrySample, SonarLogEntry, CommandEntry } from "./types";
 import { sendCommand, useLogs, useLogProgress, type SonarSample } from "./store";
 
 export type HistoryRange = "1h" | "5h" | "daily" | "weekly" | "monthly";
@@ -82,53 +92,85 @@ function fromDeviceTs(ts: number): number {
   return (ts + NJORD_EPOCH_OFFSET) * 1000;
 }
 
-const lastRequestedAt = new Map<string, number>();
-const MIN_REFETCH_INTERVAL_MS = 60_000;
-
-function requestLogDownload(deviceId: string, range: HistoryRange) {
-  lastRequestedAt.set(`${deviceId}:${range}`, Date.now());
+function requestLogDownload(deviceId: string, range: HistoryRange): CommandEntry {
   const now = Date.now();
-  sendCommand(deviceId, "start_log_download", {
+  return sendCommand(deviceId, "start_log_download", {
     from_ts: toDeviceTs(now - RANGE_WINDOW_MS[range]),
     to_ts: toDeviceTs(now),
   });
 }
 
+export interface HistoryDownloadResult {
+  status: "success" | "error";
+  message: string;
+}
+
 /**
- * Requests the firmware's flash log for `range` (throttled per
- * deviceId+range) and returns the parsed entries, a `loading` flag for the
- * very first fetch, live download progress, and a `refresh()` escape hatch
- * that bypasses the throttle — e.g. for an explicit "Load history" button,
- * since the automatic fetch alone has turned out to not always be enough:
- * if the device only just reconnected, or the app was merely resumed from
- * the background (Capacitor can keep the WebView — and this module's
- * throttle map — alive across a "restart" that isn't actually a fresh
- * process), the 60s throttle can suppress the very fetch the user is
- * waiting on, leaving charts showing only this session's live buffer.
+ * Exposes the firmware's flash log for `range`, downloaded ONLY when
+ * `refresh()` is called explicitly (e.g. the "Load history" button) — never
+ * automatically on mount or range change. Also surfaces:
+ *  - `downloading`/`progressPct` — live chunk-transfer progress.
+ *  - `result` — the outcome of the most recently *completed* request
+ *    (`{status:"success", message:"Log downloaded successfully"}` or
+ *    `{status:"error", message:"<reason>"}`), so the UI can show a
+ *    transient confirmation/error banner; call `dismissResult()` to clear it
+ *    (e.g. after an auto-dismiss timer).
+ *  - `latestEntryAt` — host-ms timestamp of the newest record currently held
+ *    in `entries` (from the last successful download), so the UI can show
+ *    "Latest data: 2h ago" before the user decides whether to download again.
  */
 export function useHistoryLog(deviceId: string | undefined, online: boolean, range: HistoryRange) {
   const entries = useLogs(deviceId);
   const progress = useLogProgress(deviceId);
+  const ackRef = useRef<CommandEntry | null>(null);
+  const [result, setResult] = useState<HistoryDownloadResult | null>(null);
+  const seenRef = useRef<{ ackUid?: string; completedAt?: number }>({});
 
+  // Ack-level failure: device not connected, malformed command, or no
+  // response within 5s (store.ts's `sendCommand` timeout). This never
+  // touches `logProgress` at all, so without watching the CommandEntry
+  // directly a failed ack used to fail completely silently.
   useEffect(() => {
-    if (!deviceId || !online) return;
-    const key = `${deviceId}:${range}`;
-    const last = lastRequestedAt.get(key) ?? 0;
-    if (Date.now() - last < MIN_REFETCH_INTERVAL_MS) return;
-    requestLogDownload(deviceId, range);
-  }, [deviceId, online, range]);
+    const ack = ackRef.current;
+    if (ack && ack.status === "error" && seenRef.current.ackUid !== ack.uid) {
+      seenRef.current.ackUid = ack.uid;
+      setResult({ status: "error", message: ack.error ?? "Download failed" });
+    }
+  });
 
-  const downloading = progress != null && progress.completedAt == null && !progress.cancelled;
-  const loading = entries.length === 0 && downloading;
+  // Transfer-level outcome: the ack succeeded but the chunked transfer then
+  // completed, stalled (store.ts's watchdog `LOG_STALL_MS` check), or the
+  // link dropped mid-transfer (`abortInFlightLogProgress`).
+  useEffect(() => {
+    if (progress && progress.completedAt != null && seenRef.current.completedAt !== progress.completedAt) {
+      seenRef.current.completedAt = progress.completedAt;
+      if (progress.cancelled) {
+        setResult({ status: "error", message: progress.error ?? "Download cancelled" });
+      } else {
+        setResult({ status: "success", message: "Log downloaded successfully" });
+      }
+    }
+  }, [progress]);
+
+  const downloading =
+    ackRef.current?.status === "pending" ||
+    (progress != null && progress.completedAt == null && !progress.cancelled);
   const progressPct =
-    downloading && progress.total > 0 ? Math.min(100, Math.round((progress.received / progress.total) * 100)) : null;
+    downloading && progress && progress.total > 0
+      ? Math.min(100, Math.round((progress.received / progress.total) * 100))
+      : null;
+  const latestEntryAt = entries.reduce((max, e) => Math.max(max, fromDeviceTs(e.ts)), 0) || null;
 
   function refresh() {
     if (!deviceId || !online) return;
-    requestLogDownload(deviceId, range);
+    ackRef.current = requestLogDownload(deviceId, range);
   }
 
-  return { entries, loading, downloading, progressPct, refresh };
+  function dismissResult() {
+    setResult(null);
+  }
+
+  return { entries, downloading, progressPct, result, dismissResult, latestEntryAt, refresh };
 }
 
 /** Adapts a flash-log TEL row to the same shape the live rolling buffer

@@ -854,7 +854,22 @@ class Store {
   batchStats: Record<string, BatchStats> = {};
   logProgress: Record<
     string,
-    { total: number; received: number; startedAt: number; completedAt?: number; cancelled?: boolean }
+    {
+      total: number;
+      received: number;
+      startedAt: number;
+      completedAt?: number;
+      cancelled?: boolean;
+      /** Host ms timestamp of the most recently received chunk (or
+       *  startedAt if none yet) — used to detect a stalled transfer (chunks
+       *  stop arriving but the link never reports disconnected) since the
+       *  watchdog otherwise treats any in-flight download as a legitimate
+       *  reason for LiveStatus silence forever. */
+      lastChunkAt: number;
+      /** Set when a stall/error aborts the transfer, so the UI can show a
+       *  real reason instead of just quietly resetting to idle. */
+      error?: string;
+    }
   > = {};
   configs: Record<string, NjordConfig> = {};
   commands: CommandEntry[] = [];
@@ -1225,7 +1240,7 @@ class Store {
   private abortInFlightLogProgress(id: string) {
     const prev = this.logProgress[id];
     if (prev && prev.completedAt == null) {
-      this.logProgress[id] = { ...prev, cancelled: true, completedAt: Date.now() };
+      this.logProgress[id] = { ...prev, cancelled: true, completedAt: Date.now(), error: "Connection lost" };
     }
   }
 
@@ -1293,6 +1308,14 @@ class Store {
    *  forever if it truly cannot deliver notifications). Reset on any frame. */
   private static readonly WATCHDOG_MAX_ATTEMPTS = 5;
 
+  /** No new LogData chunk for this long while a download is in-flight ⇒ the
+   *  transfer itself is dead (BLE glitch, firmware hiccup), not a legitimate
+   *  pause. Without this, a stalled transfer sat marked "downloading"
+   *  forever — the watchdog's normal stale-LiveStatus check exempts any
+   *  in-flight download unconditionally, since a *healthy* download also
+   *  silences LiveStatus for its whole duration. */
+  private static readonly LOG_STALL_MS = 15000;
+
   /** Force a teardown+reconnect for any online device whose LiveStatus has
    *  gone silent. Skips devices with an in-flight log download (firmware
    *  suppresses LiveStatus during transfers) and any reconnect already in
@@ -1303,6 +1326,28 @@ class Store {
       if (!dev.online) continue;
       const rt = this.rt.get(dev.id);
       if (!rt || !rt.autoReconnect || rt.reconnecting || rt.reconnectTimer) continue;
+
+      // Check for a stalled log download FIRST — it would otherwise be
+      // permanently invisible to every check below, since both `rt.log` and
+      // an in-flight `logProgress` are treated as a legitimate reason for
+      // LiveStatus silence.
+      const progress = this.logProgress[dev.id];
+      if (progress && progress.completedAt == null && now - progress.lastChunkAt > Store.LOG_STALL_MS) {
+        console.warn(
+          `[njord] log download stalled on ${dev.id} (no chunk for ${Math.round((now - progress.lastChunkAt) / 1000)}s) — aborting`,
+        );
+        this.logProgress[dev.id] = {
+          ...progress,
+          cancelled: true,
+          completedAt: now,
+          error: "Download stalled — no data received",
+        };
+        rt.log = undefined;
+        this.notify();
+        void this.forceReconnect(dev.id, "log download stalled");
+        continue;
+      }
+
       if (rt.log) continue; // log download legitimately silences LiveStatus
       // rt.log is only populated once the *first* LogData chunk actually
       // arrives (handleLogData). Firmware suppresses LiveStatus the instant
@@ -1313,7 +1358,6 @@ class Store {
       // logProgress is set synchronously from the STARTLOGDL ack (see
       // handleResponse's "start_log_download" case), so checking it too
       // closes that gap for the whole download, not just after the first chunk.
-      const progress = this.logProgress[dev.id];
       if (progress && progress.completedAt == null) continue;
       if (now - dev.lastUpdate < Store.WATCHDOG_STALE_MS) continue;
       if (rt.staleReconnects >= Store.WATCHDOG_MAX_ATTEMPTS) continue; // gave up
@@ -1562,6 +1606,7 @@ class Store {
       total: rt.log.total,
       received: rt.log.received.size,
       startedAt: this.logProgress[id]?.startedAt ?? Date.now(),
+      lastChunkAt: Date.now(),
     };
     if (rt.log.received.size === rt.log.total) {
       // Concatenate every chunk payload in seq order, then decode the resulting
@@ -1760,10 +1805,27 @@ class Store {
           // Response: `<id> OK total_chunks`
           const total = parseInt(r.data.trim().split(/\s+/)[0], 10);
           if (!Number.isNaN(total) && total > 0) {
+            const now = Date.now();
             this.logProgress[deviceId] = {
               total,
               received: 0,
-              startedAt: Date.now(),
+              startedAt: now,
+              lastChunkAt: now,
+            };
+          } else if (!Number.isNaN(total) && total === 0) {
+            // Nothing in the requested range — a legitimate empty result,
+            // not a failure. Without this branch logProgress was never set
+            // at all, so `downloading` stayed permanently false and the UI
+            // silently did nothing instead of ever reaching a "done" state
+            // (no entries, but also no error/success feedback either).
+            const now = Date.now();
+            this.logs[deviceId] = this.logs[deviceId] ?? [];
+            this.logProgress[deviceId] = {
+              total: 0,
+              received: 0,
+              startedAt: now,
+              lastChunkAt: now,
+              completedAt: now,
             };
           }
         }

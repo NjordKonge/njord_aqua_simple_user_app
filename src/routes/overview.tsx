@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { ChevronLeft, Download, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, Download, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { useDevices, useTelemetry, useSonarHistory } from "@/lib/device/store";
 import { useDeviceSummary } from "@/lib/device/useDeviceSummary";
 import { wattsFromTelemetry, voltsFromTelemetry } from "@/lib/device/power";
@@ -11,6 +11,7 @@ import {
   RANGE_WINDOW_MS,
   RANGE_SHORT_LABEL,
   chartAxisLabels,
+  formatRelativeAgo,
   type HistoryRange,
 } from "@/lib/device/history";
 import { MiniLineChart } from "@/components/ui/MiniLineChart";
@@ -35,18 +36,27 @@ function OverviewScreen() {
   // Pulls the firmware's own flash-log history for the selected window, so
   // these charts show everything the device recorded — including while the
   // app was closed — not just this session's live rolling buffer (see
-  // lib/device/history.ts for why that buffer alone isn't enough). The
-  // automatic fetch is throttled, so `refresh()` is also wired to an
-  // explicit "Load history" button below — belt and braces for cases where
-  // the automatic fetch didn't happen to land (device only just reconnected,
-  // app resumed from background rather than a true cold start, etc.).
+  // lib/device/history.ts for why that buffer alone isn't enough). Downloads
+  // ONLY ever happen when the user taps "Load history" below — never
+  // automatically on mount or when switching range tabs.
   const {
     entries: logEntries,
-    loading: historyLoading,
     downloading: historyDownloading,
     progressPct: historyProgressPct,
+    result: historyResult,
+    dismissResult: dismissHistoryResult,
+    latestEntryAt,
     refresh: refreshHistory,
   } = useHistoryLog(deviceId, Boolean(device?.online), range);
+  const historyLoading = logEntries.length === 0 && historyDownloading;
+
+  // Auto-dismiss the success/error banner after a few seconds so it doesn't
+  // linger indefinitely once the user has seen it.
+  useEffect(() => {
+    if (!historyResult) return;
+    const t = setTimeout(() => dismissHistoryResult(), 4000);
+    return () => clearTimeout(t);
+  }, [historyResult, dismissHistoryResult]);
 
   const since = Date.now() - RANGE_WINDOW_MS[range];
   const rangeShort = RANGE_SHORT_LABEL[range];
@@ -119,23 +129,49 @@ function OverviewScreen() {
         />
       </div>
 
-      <button
-        onClick={refreshHistory}
-        disabled={!device?.online || historyDownloading}
-        className="press flex w-full items-center justify-center gap-2 rounded-card border border-border-soft bg-surface-muted py-2.5 text-sm font-medium text-muted transition-opacity disabled:opacity-60"
-      >
-        {historyDownloading ? (
-          <>
-            <Loader2 size={15} className="animate-spin" />
-            {historyProgressPct !== null ? `Loading history… ${historyProgressPct}%` : "Loading history…"}
-          </>
-        ) : (
-          <>
-            <Download size={15} />
-            Load history
-          </>
+      <div className="space-y-2">
+        <p className="text-center text-xs text-faint">
+          {latestEntryAt !== null
+            ? `Latest downloaded data: ${formatRelativeAgo(latestEntryAt)}`
+            : "No history downloaded yet"}
+        </p>
+
+        <button
+          onClick={refreshHistory}
+          disabled={!device?.online || historyDownloading}
+          className="press flex w-full items-center justify-center gap-2 rounded-card border border-border-soft bg-surface-muted py-2.5 text-sm font-medium text-muted transition-opacity disabled:opacity-60"
+        >
+          {historyDownloading ? (
+            <>
+              <Loader2 size={15} className="animate-spin" />
+              {historyProgressPct !== null ? `Loading history… ${historyProgressPct}%` : "Loading history…"}
+            </>
+          ) : (
+            <>
+              <Download size={15} />
+              Load history
+            </>
+          )}
+        </button>
+
+        {historyResult && (
+          <div
+            className={
+              "flex items-center gap-2 rounded-card px-3 py-2 text-sm " +
+              (historyResult.status === "success"
+                ? "bg-good/20 text-good"
+                : "bg-bad/20 text-bad")
+            }
+          >
+            {historyResult.status === "success" ? (
+              <CheckCircle2 size={15} />
+            ) : (
+              <AlertCircle size={15} />
+            )}
+            {historyResult.message}
+          </div>
         )}
-      </button>
+      </div>
 
       <section>
         <p className="mb-2.5 type-label uppercase tracking-wider text-faint">Operation cycle</p>
