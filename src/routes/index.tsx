@@ -1,19 +1,35 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import { Settings as SettingsIcon, Thermometer, Zap, Droplets, HelpCircle } from "lucide-react";
-import { useDevices, useCommands, sendCommand } from "@/lib/device/store";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Settings as SettingsIcon,
+  Thermometer,
+  Zap,
+  Droplets,
+  HelpCircle,
+  Gauge as GaugeIcon,
+  BluetoothSearching,
+  AlertTriangle,
+} from "lucide-react";
+import { useDevices, useCommands, useTelemetry, sendCommand } from "@/lib/device/store";
 import type { CommandEntry } from "@/lib/device/types";
 import { useDeviceSummary } from "@/lib/device/useDeviceSummary";
 import { startTreatment, stopTreatment, clearFault, pairDevice } from "@/lib/device/actions";
 import { requestTankReading } from "@/lib/device/tank";
 import { setDosingMode, type DosingMode } from "@/lib/device/dosing";
+import { formatRelativeAgo } from "@/lib/device/history";
 import { playModeChangeFeedback, playConfirmFeedback, playAbortFeedback } from "@/lib/ui/feedback";
 import { BUILD_TAG } from "@/lib/buildInfo";
 import { Header } from "@/components/layout/Header";
 import { StatusRow } from "@/components/device/StatusRow";
 import { TankGraphic } from "@/components/device/TankGraphic";
+import { DeviceCard } from "@/components/device/DeviceCard";
 import { InfoSheet } from "@/components/ui/InfoSheet";
 import { Button } from "@/components/ui/Button";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { MetricTile } from "@/components/ui/MetricTile";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { EmptyState } from "@/components/ui/Skeleton";
+import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
@@ -68,6 +84,19 @@ function HomeScreen() {
   const displayedMode = pendingMode ?? dosingMode;
   const commands = useCommands(device?.id);
 
+  // Recent live samples, purely to give the metric tiles a sparkline —
+  // "which way is this heading" context that a bare number can't carry.
+  // Read-only use of telemetry the store already collects; nothing extra is
+  // requested from the device for this.
+  const telemetry = useTelemetry(device?.id);
+  const trends = useMemo(() => {
+    const recent = telemetry.slice(-32);
+    return {
+      temp: recent.map((s) => s.temp_c),
+      watts: recent.map((s) => (s.elec_ma * s.supply_mv) / 1_000_000),
+    };
+  }, [telemetry]);
+
   useEffect(() => {
     if (pendingMode === null) return;
     if (dosingMode === pendingMode) {
@@ -107,13 +136,15 @@ function HomeScreen() {
 
   if (!device) {
     return (
-      <div className="stagger">
+      <div className="stagger space-y-6">
         <Header />
-        <div className="surface-lift space-y-4 rounded-card border border-border-soft bg-surface p-5">
-          <p className="text-muted">Connect your Njord Aqua to get started.</p>
-          <Button onClick={() => void pairDevice()}>Connect device</Button>
-        </div>
-        <p className="mt-4 text-center text-xs text-faint">Build {BUILD_TAG}</p>
+        <EmptyState
+          icon={BluetoothSearching}
+          title="No device paired"
+          description="Connect your Njord Aqua to see water status, tank level and live readings."
+          action={<Button onClick={() => void pairDevice()}>Connect device</Button>}
+        />
+        <p className="text-center type-label text-faint">Build {BUILD_TAG}</p>
       </div>
     );
   }
@@ -133,9 +164,20 @@ function HomeScreen() {
       />
 
       <div className="flex items-baseline justify-between">
-        <p className="text-sm text-muted">Overview of Tank 1</p>
+        <h1 className="type-title text-content">Tank 1</h1>
         <p className="type-label text-faint">{BUILD_TAG}</p>
       </div>
+
+      <DeviceCard
+        name={name}
+        online={device.online}
+        reconnecting={device.reconnecting}
+        freshness={
+          device.online && device.lastUpdate
+            ? `Updated ${formatRelativeAgo(device.lastUpdate)}`
+            : undefined
+        }
+      />
 
       <StatusRow
         tone={waterStatus.tone}
@@ -154,8 +196,16 @@ function HomeScreen() {
           a dark surface), so a white card made it unreadable — "white on
           white". brand-deep gives it back the contrast it needs, for both
           the outline and the coloured fill level. */}
-      <div className="surface-lift flex flex-col items-center rounded-card border border-white/10 bg-brand-deep p-4">
-        <div className="h-72 w-full">
+      <div className="surface-lift overflow-hidden rounded-card border border-white/10 bg-brand-deep">
+        <div className="flex items-center justify-between gap-3 px-4 pt-4">
+          <p className="truncate type-heading text-on-fill">{name}</p>
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 type-label text-on-fill/85">
+            <GaugeIcon size={12} strokeWidth={2.2} />
+            Tank level
+          </span>
+        </div>
+
+        <div className="h-64 w-full px-4 pt-2">
           <TankGraphic
             percent={tank.percent}
             liters={tank.liters}
@@ -163,86 +213,107 @@ function HomeScreen() {
             low={tank.low}
             hasReading={tank.hasReading}
             electrolysisOn={electrolysisOn}
+            showCaption={false}
           />
         </div>
-        <p className="mt-3 shrink-0 type-heading text-on-fill">{name}</p>
-        <span
-          className={cn(
-            "mt-1 inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 type-label",
-            device.online ? "bg-good/20 text-good" : "bg-bad/20 text-bad",
-          )}
-        >
-          <span
-            className={cn(
-              "h-1.5 w-1.5 rounded-full",
-              device.online ? "animate-breathe bg-good" : "bg-bad",
-            )}
+
+        {/* Level / volume / capacity as a typographic strip rather than one
+            run-on caption: the figure carries the weight, the word beneath
+            it stays small and quiet, so the numbers are scannable at a
+            glance and the labels never compete with them. */}
+        <div className="mt-3 grid grid-cols-3 divide-x divide-white/10 border-t border-white/10">
+          <TankStat
+            value={tank.hasReading ? tank.percent : null}
+            unit="%"
+            label="Level"
+            emphasis={tank.low ? "warn" : "normal"}
           />
-          {device.online ? "Connected" : "Not connected"}
-        </span>
+          <TankStat
+            value={tank.hasReading ? tank.liters : null}
+            unit="L"
+            label="Volume"
+            emphasis={tank.low ? "warn" : "normal"}
+          />
+          <TankStat value={tank.capacityLiters} unit="L" label="Capacity" emphasis="quiet" />
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
-        <Metric icon={Thermometer} label="Water temp" value={
-          health?.temperature.available ? `${health.temperature.celsius}°C` : "—"
-        } />
-        <Metric
-          icon={Zap}
-          label="Watts"
-          value={
-            watts === null
-              ? "—"
-              // "waiting" = this cycle's charge target is already reached and
-              // the electrode is holding for the next cycle — a normal part
-              // of the dosing workflow, not a fault, but a flat "0 W" reads
-              // as broken/stuck. Say so explicitly instead. (watts is 0 for
-              // every other non-"on" state, so this is purely a label choice.)
-              : electrolysisState === "waiting"
-                ? "Waiting\u2026"
-                : `${watts.toFixed(0)} W`
-          }
-          muted={electrolysisState === "waiting"}
+        <MetricTile
+          icon={Thermometer}
+          label="Water temp"
+          tone="info"
+          value={health?.temperature.available ? health.temperature.celsius : null}
+          unit="°C"
+          trend={trends.temp}
         />
-        <Metric icon={Droplets} label="Water used" value="N/A" muted />
+        <MetricTile
+          icon={Zap}
+          label="Power"
+          tone="warn"
+          value={watts}
+          unit="W"
+          trend={trends.watts}
+          // "waiting" = this cycle's charge target is already reached and
+          // the electrode is holding for the next cycle — a normal part of
+          // the dosing workflow, not a fault, but a flat "0 W" reads as
+          // broken/stuck. Say so explicitly instead. (watts is 0 for every
+          // other non-"on" state, so this is purely a label choice.)
+          placeholderText={
+            electrolysisState === "waiting" ? "Waiting\u2026" : watts === null ? "—" : undefined
+          }
+        />
+        <MetricTile icon={Droplets} label="Water used" tone="info" value={null} placeholderText="N/A" />
       </div>
 
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted">Chlorination mode</p>
-        <button
-          aria-label="More information"
-          onClick={() => setModeInfoOpen(true)}
-          className="press rounded-full p-1 text-faint"
-        >
-          <HelpCircle size={18} />
-        </button>
+      <div>
+        <SectionHeader
+          title="Chlorination mode"
+          action={
+            <button
+              aria-label="More information"
+              onClick={() => setModeInfoOpen(true)}
+              className="press rounded-full p-1 text-faint"
+            >
+              <HelpCircle size={18} />
+            </button>
+          }
+        />
+        <div className="space-y-3">
+          <LiveElectrolysisStatus online={device.online} state={electrolysisState} />
+          <DosingModeToggle
+            mode={displayedMode}
+            onChange={(mode) => {
+              setPendingMode(mode);
+              playModeChangeFeedback(mode);
+              // setDosingMode is async (STOP is awaited before SETCFG/START are
+              // sent, in series). onEntry reports each step's command entry as
+              // it's sent, so the ref always reflects the currently in-flight
+              // (or just-failed) command instead of only the last one.
+              pendingEntryRef.current = null;
+              void setDosingMode(device.id, mode, cycleSeconds, targetMa, (entry) => {
+                pendingEntryRef.current = entry;
+              });
+            }}
+          />
+        </div>
       </div>
 
-      <LiveElectrolysisStatus online={device.online} state={electrolysisState} />
-      <DosingModeToggle
-        mode={displayedMode}
-        onChange={(mode) => {
-          setPendingMode(mode);
-          playModeChangeFeedback(mode);
-          // setDosingMode is async (STOP is awaited before SETCFG/START are
-          // sent, in series). onEntry reports each step's command entry as
-          // it's sent, so the ref always reflects the currently in-flight
-          // (or just-failed) command instead of only the last one.
-          pendingEntryRef.current = null;
-          void setDosingMode(device.id, mode, cycleSeconds, targetMa, (entry) => {
-            pendingEntryRef.current = entry;
-          });
-        }}
-      />
 
       {attention.length > 0 ? (
-        <div className="surface-lift relative space-y-2 overflow-hidden rounded-card border border-border-soft bg-surface py-4 pl-[1.125rem] pr-4">
+        <div className="surface-lift relative overflow-hidden rounded-card border border-border-soft bg-surface py-4 pl-[1.125rem] pr-4">
           <span aria-hidden className="absolute inset-y-3 left-0 w-[3px] rounded-full bg-warn" />
-          <p className="type-label uppercase tracking-wider text-warn">Needs attention</p>
-          {attention.map((message) => (
-            <p key={message} className="text-sm leading-snug text-content">
-              {message}
-            </p>
-          ))}
+          <div className="flex items-center gap-1.5 text-warn">
+            <AlertTriangle size={13} strokeWidth={2.2} />
+            <p className="type-cap">Needs attention</p>
+          </div>
+          <div className="mt-2 space-y-1.5">
+            {attention.map((message) => (
+              <p key={message} className="text-sm leading-snug text-content">
+                {message}
+              </p>
+            ))}
+          </div>
         </div>
       ) : null}
 
@@ -309,31 +380,44 @@ function HomeScreen() {
   );
 }
 
-function Metric({
-  icon: Icon,
-  label,
+/**
+ * One figure in the tank card's bottom strip. Sits on the dark brand-deep
+ * surface, so the colours here are white-on-dark rather than the usual
+ * token pairs. `quiet` is for the fixed capacity figure — it's a setting,
+ * not a reading, so it shouldn't pull the same visual weight as the live
+ * numbers beside it.
+ */
+function TankStat({
   value,
-  muted,
+  unit,
+  label,
+  emphasis,
 }: {
-  icon: typeof Thermometer;
+  value: number | null;
+  unit: string;
   label: string;
-  value: string;
-  muted?: boolean;
+  emphasis: "normal" | "warn" | "quiet";
 }) {
   return (
-    <div className="surface-lift rounded-card border border-border-soft bg-surface p-4">
-      <div className="flex items-center gap-1.5 text-faint">
-        <Icon size={14} strokeWidth={2.1} />
-        <span className="type-label uppercase tracking-wider">{label}</span>
-      </div>
-      <p
-        className={cn(
-          "tnum mt-1.5 text-[1.75rem] font-medium leading-tight tracking-tight",
-          muted && "text-sm font-normal text-muted",
-        )}
-      >
-        {value}
-      </p>
+    <div className="flex flex-col items-center px-2 py-3">
+      {value === null ? (
+        <span className="type-value text-on-fill/40">—</span>
+      ) : (
+        <AnimatedNumber
+          value={value}
+          decimals={0}
+          unit={unit}
+          className={cn(
+            "type-value",
+            emphasis === "warn" ? "text-warn" : emphasis === "quiet" ? "text-on-fill/55" : "text-on-fill",
+          )}
+          unitClassName={cn(
+            "ml-0.5 type-unit",
+            emphasis === "warn" ? "text-warn/80" : "text-on-fill/50",
+          )}
+        />
+      )}
+      <p className="mt-0.5 type-cap text-on-fill/50">{label}</p>
     </div>
   );
 }
@@ -359,40 +443,21 @@ function LiveElectrolysisStatus({
   state: "on" | "waiting" | "off";
 }) {
   const effective = online ? state : "off";
-  const text = !online ? "—" : effective === "on" ? "On" : effective === "waiting" ? "Done for cycle" : "Off";
+  const badge = !online
+    ? { tone: "bad" as const, label: "Offline" }
+    : effective === "on"
+      ? { tone: "good" as const, label: "Running" }
+      : effective === "waiting"
+        ? { tone: "warn" as const, label: "Done for cycle" }
+        : { tone: "bad" as const, label: "Off" };
 
   return (
-    <div className="surface-lift flex items-center gap-2.5 rounded-card border border-border-soft bg-surface px-3.5 py-3">
-      <Led state={effective} />
-      <span className="type-label uppercase tracking-wider text-muted">Live electrolysis status</span>
-      <span
-        className={cn(
-          "ml-auto type-label uppercase tracking-wider font-semibold transition-colors duration-300",
-          effective === "on" && "text-good",
-          effective === "waiting" && "text-warn",
-          effective === "off" && "text-bad",
-        )}
-      >
-        {text}
-      </span>
+    <div className="surface-lift flex items-center justify-between gap-3 rounded-card border border-border-soft bg-surface px-3.5 py-3">
+      <span className="type-cap text-faint">Live electrolysis</span>
+      {/* Only a genuinely-running electrode gets the pulsing dot; the other
+          states are steady, so the motion keeps meaning "right now". */}
+      <StatusBadge tone={badge.tone} label={badge.label} pulse={effective === "on" && online} />
     </div>
-  );
-}
-
-/** Single dot for LiveElectrolysisStatus — "on" breathes green, "waiting" is
- *  a steady yellow, "off" is a steady red. */
-function Led({ state }: { state: "on" | "waiting" | "off" }) {
-  return (
-    <span className="relative flex h-2.5 w-2.5 shrink-0 items-center justify-center">
-      <span
-        className={cn(
-          "h-2.5 w-2.5 rounded-full transition-colors duration-300",
-          state === "on" && "animate-breathe bg-good",
-          state === "waiting" && "bg-warn",
-          state === "off" && "bg-bad",
-        )}
-      />
-    </span>
   );
 }
 

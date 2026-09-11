@@ -40,6 +40,7 @@ export function TankGraphic({
   low,
   hasReading,
   electrolysisOn,
+  showCaption = true,
 }: {
   /** 0-100, or null when no sonar reading has been taken this session. */
   percent: number | null;
@@ -51,6 +52,9 @@ export function TankGraphic({
    *  pulses the drop-in probe green while true, matching the Home screen's
    *  Electrolysis LED. */
   electrolysisOn: boolean;
+  /** Set false when the caller shows the level/volume figures itself, so
+   *  the same numbers aren't printed twice under the artwork. */
+  showCaption?: boolean;
 }) {
   const clamped = percent === null ? 0 : Math.max(0, Math.min(100, percent));
   // The card behind this artwork is dark (brand-deep, #0f4c68 — see
@@ -133,11 +137,13 @@ export function TankGraphic({
         </div>
       </div>
 
-      <p className={cn("tnum mt-2 shrink-0 text-sm font-medium", low ? "text-warn" : "text-on-fill")}>
-        {hasReading && liters !== null
-          ? `${Math.round(liters)}L of ${capacityLiters}L`
-          : "Level unknown"}
-      </p>
+      {showCaption ? (
+        <p className={cn("tnum mt-2 shrink-0 text-sm font-medium", low ? "text-warn" : "text-on-fill")}>
+          {hasReading && liters !== null
+            ? `${Math.round(liters)}L of ${capacityLiters}L`
+            : "Level unknown"}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Bluetooth, BluetoothOff, Check } from "lucide-react";
 import { useDevices, useConfig, updateConfig } from "@/lib/device/store";
 import { pairDevice, forgetDevice, reconnectDevice } from "@/lib/device/actions";
 import {
@@ -28,12 +29,47 @@ import { Button } from "@/components/ui/Button";
 import { ListRow } from "@/components/ui/ListRow";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { InfoSheet } from "@/components/ui/InfoSheet";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsScreen,
 });
 
 const TANK_VOLUME_OPTIONS_L = [500, 1000, 1500, 2000, 3000, 5000];
+
+/**
+ * Brief "Saved" confirmation after a field commits. These settings write
+ * straight through on blur with no Save button, so without an explicit
+ * acknowledgement there is nothing to tell the user the change actually
+ * took — the field just looks the same as before they touched it.
+ */
+function useSavedFlash(ms = 1600) {
+  const [saved, setSaved] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  const flash = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
+    setSaved(true);
+    timer.current = setTimeout(() => setSaved(false), ms);
+  }, [ms]);
+
+  return { saved, flash };
+}
+
+/** The "Saved" tick itself — shared by every committed field below. */
+function SavedFlash({ show }: { show: boolean }) {
+  if (!show) return null;
+  return (
+    <span className="inline-flex animate-pop items-center gap-1 type-label text-good">
+      <Check size={13} strokeWidth={2.6} />
+      Saved
+    </span>
+  );
+}
 
 function SettingsScreen() {
   const devices = useDevices();
@@ -59,10 +95,12 @@ function SettingsScreen() {
       <section>
         {device?.online ? (
           <div className="surface-lift space-y-3 rounded-card border border-border-soft bg-surface p-4">
-            <p className="type-label uppercase tracking-wider text-faint">Bluetooth</p>
-            <p className="flex items-center gap-2 text-good">
-              <span className="h-2 w-2 shrink-0 animate-breathe rounded-full bg-good" />
-              Connected to {device.name}
+            <div className="flex items-center justify-between gap-3">
+              <p className="type-cap text-faint">Bluetooth</p>
+              <StatusBadge tone="good" label="Connected" icon={Bluetooth} />
+            </div>
+            <p className="text-sm text-muted">
+              Connected to <span className="font-medium text-content">{device.name}</span>
             </p>
             <Button variant="secondary" onClick={() => void forgetDevice(device.id)}>
               Forget device
@@ -70,8 +108,13 @@ function SettingsScreen() {
           </div>
         ) : device ? (
           <div className="surface-lift space-y-3 rounded-card border border-border-soft bg-surface p-4">
-            <p className="type-label uppercase tracking-wider text-faint">Bluetooth</p>
-            <p className="text-muted">Not connected to {device.name}</p>
+            <div className="flex items-center justify-between gap-3">
+              <p className="type-cap text-faint">Bluetooth</p>
+              <StatusBadge tone="bad" label="Offline" icon={BluetoothOff} />
+            </div>
+            <p className="text-sm text-muted">
+              Not connected to <span className="font-medium text-content">{device.name}</span>
+            </p>
             <Button onClick={() => void reconnectDevice(device.id)}>Reconnect</Button>
             <Button variant="secondary" onClick={() => void forgetDevice(device.id)}>
               Forget device
@@ -84,7 +127,7 @@ function SettingsScreen() {
 
       {/* Tank setup */}
       <section>
-        <p className="mb-2.5 type-label uppercase tracking-wider text-faint">Tank setup</p>
+        <SectionHeader title="Tank setup" />
         <div className="surface-lift overflow-hidden rounded-card border border-border-soft">
           <ListRow
             label="Tank model"
@@ -102,7 +145,7 @@ function SettingsScreen() {
 
       {/* Water source */}
       <section>
-        <p className="mb-2.5 type-label uppercase tracking-wider text-faint">Water source</p>
+        <SectionHeader title="Water source" />
         <div className="surface-lift overflow-hidden rounded-card border border-border-soft">
           <ListRow
             label="Source type"
@@ -115,9 +158,14 @@ function SettingsScreen() {
 
       {/* Pre-chlorination */}
       <section className="surface-lift rounded-card border border-border-soft bg-surface p-4">
-        <div className="mb-3 flex items-baseline justify-between">
-          <p className="type-label uppercase tracking-wider text-faint">Pre-chlorination of incoming water</p>
-          <p className="tnum shrink-0 pl-3 font-semibold text-brand">{prechlorination.toFixed(1)} mg/L</p>
+        <div className="mb-3 flex items-baseline justify-between gap-3">
+          <p className="type-cap text-faint">Pre-chlorination of incoming water</p>
+          {/* The value sits in a tinted pill rather than as loose text, so
+              the current setting reads as the slider's own readout. */}
+          <span className="tnum shrink-0 rounded-full bg-brand/12 px-2.5 py-1 text-sm font-semibold text-brand">
+            {prechlorination.toFixed(1)}
+            <span className="ml-0.5 type-unit font-medium text-brand/70">mg/L</span>
+          </span>
         </div>
         <input
           type="range"
@@ -127,17 +175,22 @@ function SettingsScreen() {
           value={prechlorination}
           disabled={!device?.online}
           onChange={(e) => device?.online && setPrechlorination(device.id, Number(e.target.value))}
-          className="w-full accent-[var(--color-brand)] disabled:opacity-50"
+          className="h-6 w-full accent-[var(--color-brand)] disabled:opacity-50"
         />
+        {/* Endpoint labels so the slider's range is legible without dragging. */}
+        <div className="mt-0.5 flex justify-between type-label text-faint">
+          <span>{PRECHLORINATION_MIN_MG_L.toFixed(1)}</span>
+          <span>{PRECHLORINATION_MAX_MG_L.toFixed(1)} mg/L</span>
+        </div>
         {!device?.online ? (
-          <p className="mt-2 text-xs text-faint">Connect to the device to change this setting.</p>
+          <p className="mt-2 type-label text-faint">Connect to the device to change this setting.</p>
         ) : null}
       </section>
 
       {/* Electrode current */}
       <section className="surface-lift space-y-3 rounded-card border border-border-soft bg-surface p-4">
-        <p className="type-label uppercase tracking-wider text-faint">Electrode current</p>
-        <p className="text-xs text-muted">
+        <p className="type-cap text-faint">Electrode current</p>
+        <p className="text-xs leading-relaxed text-muted">
           The device drives the electrode with a PWM current controller (see AppStateMachine.cpp)
           that continuously adjusts the H-bridge duty cycle to track this target current — it is
           not a fixed duty, it actively measures and corrects toward this exact setpoint every
@@ -152,8 +205,8 @@ function SettingsScreen() {
 
       {/* Chlorination charge levels */}
       <section className="surface-lift space-y-3 rounded-card border border-border-soft bg-surface p-4">
-        <p className="type-label uppercase tracking-wider text-faint">Chlorination charge levels</p>
-        <p className="text-xs text-muted">
+        <p className="type-cap text-faint">Chlorination charge levels</p>
+        <p className="text-xs leading-relaxed text-muted">
           Sets how much charge the device delivers per cycle for the Normal and High chlorination
           modes on the Home screen, as a percentage of the theoretical max charge deliverable in
           one cycle at the electrode current above. More charge produces more chlorine.
@@ -254,6 +307,7 @@ function PercentChargeField({
   onCommit: (percent: number) => void;
 }) {
   const [text, setText] = useState(String(percent));
+  const { saved, flash } = useSavedFlash();
   const referenceC =
     cycleSeconds && targetMa
       ? Math.round((percent / 100) * theoreticalMaxChargeC(cycleSeconds, targetMa))
@@ -261,7 +315,10 @@ function PercentChargeField({
 
   return (
     <div className="flex items-center justify-between gap-3">
-      <label className="text-sm">{label}</label>
+      <label className="flex items-center gap-2 text-sm text-content">
+        {label}
+        <SavedFlash show={saved} />
+      </label>
       <div className="flex items-center gap-2">
         <input
           type="number"
@@ -275,11 +332,18 @@ function PercentChargeField({
             const parsed = Math.round(Number(text));
             const next = Number.isFinite(parsed) && parsed >= 1 && parsed <= 100 ? parsed : percent;
             setText(String(next));
-            if (next !== percent) onCommit(next);
+            if (next !== percent) {
+              onCommit(next);
+              flash();
+            }
           }}
-          className="w-20 rounded-inner border border-border bg-surface px-3 py-2.5 text-right text-content transition-colors focus:border-brand focus:outline-none"
+          className={cn(
+            "w-20 rounded-inner border bg-surface px-3 py-2.5 text-right tnum text-content transition-colors",
+            "focus:border-brand focus:outline-none",
+            saved ? "border-good" : "border-border",
+          )}
         />
-        <span className="text-xs text-muted">% ({referenceC ?? "—"} C)</span>
+        <span className="type-label text-faint">% ({referenceC ?? "—"} C)</span>
       </div>
     </div>
   );
@@ -295,6 +359,7 @@ function CycleLengthField({
   onCommit: (value: number) => void;
 }) {
   const [text, setText] = useState(value != null ? String(value) : "");
+  const { saved, flash } = useSavedFlash();
 
   // `value` comes from the live device config (unlike ChargeLevelField's
   // phone-local value), so it can change out from under us — e.g. once it
@@ -305,7 +370,10 @@ function CycleLengthField({
 
   return (
     <div className="flex items-center justify-between gap-3">
-      <label className="text-sm">Cycle length</label>
+      <label className="flex items-center gap-2 text-sm text-content">
+        Cycle length
+        <SavedFlash show={saved} />
+      </label>
       <div className="flex items-center gap-2">
         <input
           type="number"
@@ -321,11 +389,18 @@ function CycleLengthField({
             const fallback = value ?? 0;
             const next = Number.isFinite(parsed) && parsed >= 1 && parsed <= 86400 ? parsed : fallback;
             setText(String(next));
-            if (next !== value) onCommit(next);
+            if (next !== value) {
+              onCommit(next);
+              flash();
+            }
           }}
-          className="w-24 rounded-inner border border-border bg-surface px-3 py-2.5 text-right text-content transition-colors focus:border-brand focus:outline-none disabled:opacity-50"
+          className={cn(
+            "w-24 rounded-inner border bg-surface px-3 py-2.5 text-right tnum text-content transition-colors",
+            "focus:border-brand focus:outline-none disabled:opacity-50",
+            saved ? "border-good" : "border-border",
+          )}
         />
-        <span className="text-xs text-muted">s</span>
+        <span className="type-label text-faint">s</span>
       </div>
     </div>
   );
@@ -341,6 +416,7 @@ function TargetCurrentField({
   onCommit: (value: number) => void;
 }) {
   const [text, setText] = useState(value != null ? String(value) : "");
+  const { saved, flash } = useSavedFlash();
 
   // `value` comes from the live device config, so it can change out from
   // under us (initial load after connecting, or once our own SETCFG
@@ -351,7 +427,10 @@ function TargetCurrentField({
 
   return (
     <div className="flex items-center justify-between gap-3">
-      <label className="text-sm">Target current</label>
+      <label className="flex items-center gap-2 text-sm text-content">
+        Target current
+        <SavedFlash show={saved} />
+      </label>
       <div className="flex items-center gap-2">
         <input
           type="number"
@@ -370,11 +449,18 @@ function TargetCurrentField({
                 ? parsed
                 : fallback;
             setText(String(next));
-            if (next !== value) onCommit(next);
+            if (next !== value) {
+              onCommit(next);
+              flash();
+            }
           }}
-          className="w-24 rounded-inner border border-border bg-surface px-3 py-2.5 text-right text-content transition-colors focus:border-brand focus:outline-none disabled:opacity-50"
+          className={cn(
+            "w-24 rounded-inner border bg-surface px-3 py-2.5 text-right tnum text-content transition-colors",
+            "focus:border-brand focus:outline-none disabled:opacity-50",
+            saved ? "border-good" : "border-border",
+          )}
         />
-        <span className="text-xs text-muted">mA (max {TARGET_CURRENT_MAX_MA / 1000}A)</span>
+        <span className="type-label text-faint">mA (max {TARGET_CURRENT_MAX_MA / 1000}A)</span>
       </div>
     </div>
   );

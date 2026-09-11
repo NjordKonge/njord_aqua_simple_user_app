@@ -17,7 +17,10 @@ import {
 import { MiniLineChart } from "@/components/ui/MiniLineChart";
 import { MiniBarChart } from "@/components/ui/MiniBarChart";
 import { PillTabs } from "@/components/ui/PillTabs";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { CycleRing } from "@/components/device/CycleRing";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/overview")({
   component: OverviewScreen,
@@ -132,7 +135,7 @@ function OverviewScreen() {
       </div>
 
       <div className="space-y-2">
-        <p className="text-center text-xs text-faint">
+        <p className="text-center type-label text-faint">
           {latestEntryAt !== null
             ? `Latest downloaded data: ${formatRelativeAgo(latestEntryAt)}`
             : "No history downloaded yet"}
@@ -141,29 +144,40 @@ function OverviewScreen() {
         <button
           onClick={refreshHistory}
           disabled={!device?.online || historyDownloading}
-          className="press flex w-full items-center justify-center gap-2 rounded-card border border-border-soft bg-surface-muted py-2.5 text-sm font-medium text-muted transition-opacity disabled:opacity-60"
+          className="press relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-card border border-border-soft bg-surface-muted py-2.5 text-sm font-medium text-muted transition-opacity disabled:opacity-60"
         >
-          {historyDownloading ? (
-            <>
-              <Loader2 size={15} className="animate-spin" />
-              {historyProgressPct !== null ? `Loading history… ${historyProgressPct}%` : "Loading history…"}
-            </>
-          ) : (
-            <>
-              <Download size={15} />
-              Load history
-            </>
-          )}
+          {/* Progress reads as a filling bar behind the label rather than a
+              separate widget — the control itself shows how far along it is. */}
+          {historyDownloading && historyProgressPct !== null ? (
+            <span
+              aria-hidden
+              className="absolute inset-y-0 left-0 bg-brand/12 transition-[width] duration-300 ease-[var(--ease-out-soft)]"
+              style={{ width: `${historyProgressPct}%` }}
+            />
+          ) : null}
+          <span className="relative flex items-center gap-2">
+            {historyDownloading ? (
+              <>
+                <Loader2 size={15} className="animate-spin" />
+                {historyProgressPct !== null
+                  ? `Loading history… ${historyProgressPct}%`
+                  : "Loading history…"}
+              </>
+            ) : (
+              <>
+                <Download size={15} />
+                Load history
+              </>
+            )}
+          </span>
         </button>
 
         {historyResult && (
           <div
-            className={
-              "flex items-center gap-2 rounded-card px-3 py-2 text-sm " +
-              (historyResult.status === "success"
-                ? "bg-good/20 text-good"
-                : "bg-bad/20 text-bad")
-            }
+            className={cn(
+              "flex animate-pop items-center gap-2 rounded-card px-3 py-2 text-sm",
+              historyResult.status === "success" ? "bg-good/12 text-good" : "bg-bad/12 text-bad",
+            )}
           >
             {historyResult.status === "success" ? (
               <CheckCircle2 size={15} />
@@ -176,7 +190,7 @@ function OverviewScreen() {
       </div>
 
       <section>
-        <p className="mb-2.5 type-label uppercase tracking-wider text-faint">Operation cycle</p>
+        <SectionHeader title="Operation cycle" />
         <CycleRing summary={cycleRing} />
       </section>
 
@@ -185,77 +199,70 @@ function OverviewScreen() {
           explicit empty state rather than fabricated numbers; flag for
           PM/firmware-owner whether a flow meter is planned. */}
       <section>
-        <p className="mb-1 type-label uppercase tracking-wider text-faint">Water consumption</p>
-        <p className="mb-3 type-reading text-faint">Not available</p>
+        <SectionHeader title="Water consumption" />
+        <p className="mb-3 text-sm text-muted">Not available — no flow sensor fitted</p>
         <MiniBarChart data={[]} unit="L" />
       </section>
 
-      <section>
-        <p className="mb-2.5 type-label uppercase tracking-wider text-faint">
-          Water temperature — last {rangeShort}
-        </p>
+      <ChartSection title={`Water temperature — last ${rangeShort}`} loading={historyLoading}>
         <MiniLineChart
           data={tempSeries}
           unit="°C"
           xTicks={tempTicks}
-          emptyLabel={historyLoading ? "Loading device history…" : "No data yet"}
+          emptyLabel="No data yet"
         />
-      </section>
+      </ChartSection>
 
-      <section>
-        <p className="mb-2.5 type-label uppercase tracking-wider text-faint">
-          Tank level — last {rangeShort}
-        </p>
+      <ChartSection title={`Tank level — last ${rangeShort}`} loading={historyLoading}>
         <MiniLineChart
           data={recentSonar}
           unit="mm"
           xTicks={tankTicks}
-          emptyLabel={historyLoading ? "Loading device history…" : "No sonar readings taken yet"}
+          emptyLabel="No sonar readings taken yet"
         />
-      </section>
+      </ChartSection>
 
-      <section>
-        <p className="mb-2.5 type-label uppercase tracking-wider text-faint">
-          Electrode voltage — last {rangeShort}
-        </p>
-        <MiniLineChart
-          data={voltSeries}
-          unit="V"
-          xTicks={voltTicks}
-          emptyLabel={historyLoading ? "Loading device history…" : "No data yet"}
-        />
-      </section>
+      <ChartSection title={`Electrode voltage — last ${rangeShort}`} loading={historyLoading}>
+        <MiniLineChart data={voltSeries} unit="V" xTicks={voltTicks} emptyLabel="No data yet" />
+      </ChartSection>
 
-      <section>
-        <p className="mb-2.5 type-label uppercase tracking-wider text-faint">
-          Electrode current — last {rangeShort}
-        </p>
-        <MiniLineChart
-          data={ampSeries}
-          unit="mA"
-          xTicks={ampTicks}
-          emptyLabel={historyLoading ? "Loading device history…" : "No data yet"}
-        />
-      </section>
+      <ChartSection title={`Electrode current — last ${rangeShort}`} loading={historyLoading}>
+        <MiniLineChart data={ampSeries} unit="mA" xTicks={ampTicks} emptyLabel="No data yet" />
+      </ChartSection>
 
-      <section>
-        <p className="mb-2.5 type-label uppercase tracking-wider text-faint">
-          Power draw — last {rangeShort}
-        </p>
-        <MiniLineChart
-          data={wattSeries}
-          unit="W"
-          xTicks={wattTicks}
-          emptyLabel={historyLoading ? "Loading device history…" : "No data yet"}
-        />
-      </section>
+      <ChartSection title={`Power draw — last ${rangeShort}`} loading={historyLoading}>
+        <MiniLineChart data={wattSeries} unit="W" xTicks={wattTicks} emptyLabel="No data yet" />
+      </ChartSection>
 
       {/* Last water delivery — NOT AVAILABLE: no firmware or app concept of a
           "delivery" event exists today. */}
       <section className="surface-lift rounded-card border border-border-soft bg-surface p-4">
-        <p className="type-label uppercase tracking-wider text-faint">Last water delivery</p>
-        <p className="mt-1 text-muted">Not available</p>
+        <p className="type-cap text-faint">Last water delivery</p>
+        <p className="mt-1.5 text-sm text-muted">Not available</p>
       </section>
     </div>
+  );
+}
+
+/**
+ * A titled chart block. While the first history download is still in flight
+ * there is genuinely nothing to plot, so a skeleton shaped like the chart
+ * stands in — that reads as "loading" rather than as "this device has no
+ * data", which an empty axis does.
+ */
+function ChartSection({
+  title,
+  loading,
+  children,
+}: {
+  title: string;
+  loading: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <section>
+      <SectionHeader title={title} />
+      {loading ? <Skeleton className="h-[140px] w-full rounded-card" /> : children}
+    </section>
   );
 }

@@ -1,12 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, ShieldCheck, Info, AlertTriangle, OctagonAlert } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useDevices } from "@/lib/device/store";
 import { useDeviceSummary } from "@/lib/device/useDeviceSummary";
 import { ALERT_REFERENCE } from "@/lib/device/alerts";
 import { Header } from "@/components/layout/Header";
 import { StatusRow } from "@/components/device/StatusRow";
 import { InfoSheet } from "@/components/ui/InfoSheet";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { EmptyState } from "@/components/ui/Skeleton";
 import { playTapFeedback } from "@/lib/ui/feedback";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +29,20 @@ const SEVERITY_VAR: Record<string, string> = {
   warning: "var(--color-warn)",
   error: "var(--color-bad)",
   critical: "var(--color-bad)",
+};
+/** Icon per severity, so severity is legible without relying on colour
+ *  alone — colour-blind users get the same signal from the glyph. */
+const SEVERITY_ICON: Record<string, LucideIcon> = {
+  info: Info,
+  warning: AlertTriangle,
+  error: OctagonAlert,
+  critical: OctagonAlert,
+};
+const SEVERITY_LABEL: Record<string, string> = {
+  info: "Info",
+  warning: "Warning",
+  error: "Error",
+  critical: "Critical",
 };
 
 function AlertsScreen() {
@@ -48,34 +65,62 @@ function AlertsScreen() {
       />
 
       <section>
-        <p className="mb-2.5 type-label uppercase tracking-wider text-faint">Active</p>
+        <SectionHeader
+          title="Active"
+          action={
+            device && device.alarms.length > 0 ? (
+              <span className="rounded-full bg-bad/12 px-2 py-0.5 type-label text-bad">
+                {device.alarms.length}
+              </span>
+            ) : null
+          }
+        />
         {device && device.alarms.length > 0 ? (
           <div className="space-y-2">
             {device.alarms.map((alarm) => {
               const tone = SEVERITY_VAR[alarm.severity] ?? "var(--color-info)";
+              const Icon = SEVERITY_ICON[alarm.severity] ?? Info;
+              const toneClass = SEVERITY_TONE_CLASS[alarm.severity] ?? "text-info";
               return (
                 <div
                   key={alarm.id}
-                  className="surface-lift relative overflow-hidden rounded-card border border-border-soft bg-surface py-4 pl-[1.125rem] pr-4"
+                  className="surface-lift relative flex gap-3 overflow-hidden rounded-card border border-border-soft bg-surface py-4 pl-[1.125rem] pr-4"
                 >
-                  <span aria-hidden className="absolute inset-y-3 left-0 w-[3px] rounded-full" style={{ backgroundColor: tone }} />
-                  <p className={cn("font-medium", SEVERITY_TONE_CLASS[alarm.severity] ?? "text-info")}>
-                    {alarm.message}
-                  </p>
+                  <span
+                    aria-hidden
+                    className="absolute inset-y-3 left-0 w-[3px] rounded-full"
+                    style={{ backgroundColor: tone }}
+                  />
+                  <span
+                    className={cn(
+                      "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[0.6rem]",
+                      toneClass,
+                    )}
+                    style={{ backgroundColor: `color-mix(in srgb, ${tone} 12%, transparent)` }}
+                  >
+                    <Icon size={15} strokeWidth={2.1} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className={cn("type-cap", toneClass)}>
+                      {SEVERITY_LABEL[alarm.severity] ?? "Alert"}
+                    </p>
+                    <p className="mt-0.5 text-sm leading-snug text-content">{alarm.message}</p>
+                  </div>
                 </div>
               );
             })}
           </div>
         ) : (
-          <div className="surface-lift flex items-center gap-2.5 rounded-card border border-border-soft bg-surface p-4">
-            <span className="h-2 w-2 shrink-0 rounded-full bg-good" />
-            <p className="text-muted">No active alerts.</p>
-          </div>
+          <EmptyState
+            icon={ShieldCheck}
+            title="All clear"
+            description="No active alerts. You'll see anything that needs attention here."
+          />
         )}
       </section>
 
       <section>
-        <p className="mb-2.5 type-label uppercase tracking-wider text-faint">Alert reference</p>
+        <SectionHeader title="Alert reference" />
         <div className="surface-lift overflow-hidden rounded-card border border-border-soft">
           {ALERT_REFERENCE.map((alert) => (
             <button
@@ -84,9 +129,9 @@ function AlertsScreen() {
                 playTapFeedback();
                 setReferenceOpen(alert.code);
               }}
-              className="press flex w-full items-center justify-between bg-surface-muted px-4 py-3.5 text-left not-last:border-b not-last:border-border-soft active:bg-surface-raised"
+              className="press flex w-full items-center justify-between gap-3 bg-surface-muted px-4 py-3.5 text-left not-last:border-b not-last:border-border-soft active:bg-surface-raised"
             >
-              <span>{alert.title}</span>
+              <span className="text-sm text-content">{alert.title}</span>
               <ChevronRight size={17} className="shrink-0 text-faint" />
             </button>
           ))}

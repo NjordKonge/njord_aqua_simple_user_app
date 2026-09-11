@@ -65,6 +65,11 @@
   /* Live-indicator "heartbeat" — opacity only, no scale/glow, so it reads as
      a calm live-data cue rather than a decorative pulse. */
   --animate-breathe: breathe 2.6s ease-in-out infinite;
+  /* Inline confirmation ("Saved ✓") — a single brief acknowledgement, then
+     it holds. Deliberately not a bounce. */
+  --animate-pop: pop 0.24s var(--ease-out-soft) both;
+  /* Skeleton placeholder sweep while real content loads. */
+  --animate-shimmer: shimmer 1.4s linear infinite;
 
   @keyframes rise {
     from { opacity: 0; transform: translate3d(0, 6px, 0); }
@@ -85,6 +90,14 @@
   @keyframes breathe {
     0%, 100% { opacity: 1; }
     50%      { opacity: 0.55; }
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: scale(0.9); }
+    to   { opacity: 1; transform: none; }
+  }
+  @keyframes shimmer {
+    from { background-position: -160% 0; }
+    to   { background-position: 260% 0; }
   }
 }
 
@@ -180,6 +193,34 @@
     letter-spacing: 0.02em;
   }
 
+  /* A card's primary number. Smaller than `.type-reading` (which is for the
+     single hero value on a screen) but still clearly the thing your eye
+     lands on first — the deliberate size gap between this and `.type-cap`
+     below is what makes a tile read as "value + description" rather than
+     two equally-weighted lines. */
+  .type-value {
+    font-size: 1.5rem; /* 24sp */
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: -0.018em;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+  /* The unit trailing a value ("°C", "W", "L"). Intentionally lighter and
+     smaller than the number so the figure itself carries the emphasis. */
+  .type-unit {
+    font-size: 0.8125rem; /* 13sp */
+    font-weight: 500;
+    letter-spacing: 0;
+  }
+  /* Small-caps description paired with a value. Pairs with `.type-value`. */
+  .type-cap {
+    font-size: 0.6875rem; /* 11sp */
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
   /* Minimal elevation: a hairline border carries the shape, the shadow just
      lifts a white card a little off the off-white page. No inner highlight
      gradient — that trick only reads on a dark surface. */
@@ -214,5 +255,21 @@
   .stagger > *:nth-child(6) { animation-delay: 0.11s; }
   .stagger > *:nth-child(7) { animation-delay: 0.13s; }
   .stagger > *:nth-child(n + 8) { animation-delay: 0.15s; }
+
+  /* Skeleton placeholder — matches the shape of the content it stands in
+     for, with a slow sweep so a slow BLE read reads as "loading" rather
+     than "broken". Falls back to a flat block under reduced-motion (the
+     global rule below collapses the animation). */
+  .skeleton {
+    background-image: linear-gradient(
+      90deg,
+      var(--color-surface-muted) 0%,
+      var(--color-surface-raised) 40%,
+      var(--color-surface-muted) 80%
+    );
+    background-size: 200% 100%;
+    animation: var(--animate-shimmer);
+    border-radius: 0.5rem;
+  }
 }
 

@@ -15,7 +15,9 @@ export const Route = createRootRoute({
  * The `key` on the scroll container is the current pathname, which remounts
  * the subtree on every navigation — that's what re-triggers each screen's
  * `.stagger` entrance animation, so switching tabs feels like arriving
- * somewhere rather than a hard content swap.
+ * somewhere rather than a hard content swap. A short fade on the same key
+ * softens the swap itself, so the two screens feel connected rather than
+ * cut between.
  */
 function RootLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -25,7 +27,7 @@ function RootLayout() {
     <div className="relative flex h-full flex-col overflow-hidden bg-bg">
       <main
         key={pathname}
-        className="relative z-10 flex-1 overflow-y-auto px-5 pb-8 pt-8"
+        className="relative z-10 flex-1 animate-fade overflow-y-auto px-5 pb-8 pt-8"
       >
         <Outlet />
       </main>
