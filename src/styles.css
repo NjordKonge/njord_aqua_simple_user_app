@@ -78,10 +78,11 @@
   --animate-pop: pop 0.24s var(--ease-out-soft) both;
   /* Skeleton placeholder sweep while real content loads. */
   --animate-shimmer: shimmer 1.4s linear infinite;
-  /* Electrolysis cell: gas bubbles detaching from an electrode and rising.
-     Per-bubble delay/duration/drift are set inline so they don't march in
-     lockstep — real evolution is irregular. */
-  --animate-bubble: bubble-rise 2.8s linear infinite;
+  /* Ambient bubbles drifting up behind the electrolysis status. Per-bubble
+     delay/duration/drift are set inline so they don't march in lockstep.
+     Deliberately slow: this is background texture behind a status readout,
+     so it must never pull the eye away from the words. */
+  --animate-bubble: bubble-rise 7s linear infinite;
   /* Tank water surface. Two copies of the same wave translate by exactly one
      wavelength at different speeds, which reads as a gentle swell without
      any single obvious repeating shape. */
@@ -116,13 +117,19 @@
     from { background-position: -160% 0; }
     to   { background-position: 260% 0; }
   }
-  /* Bubble travels the full height of the cell, fading in as it detaches and
-     out again as it reaches the surface, with a slight sideways drift. */
+  /* Bubble rises from the bottom of the panel to the top, fading in as it
+     appears and out again before it reaches the edge, with a slight sideways
+     drift. Travel is an explicit length, NOT a percentage: a percentage
+     translate resolves against the element's own box, so a 5px bubble would
+     move 5px. The panel sets --bubble-travel to its own height. */
   @keyframes bubble-rise {
-    0%   { opacity: 0; transform: translate3d(0, 0, 0) scale(0.6); }
-    12%  { opacity: 0.9; }
-    80%  { opacity: 0.75; }
-    100% { opacity: 0; transform: translate3d(var(--bubble-drift, 4px), -100%, 0) scale(1); }
+    0%   { opacity: 0; transform: translate3d(0, 0, 0) scale(0.7); }
+    20%  { opacity: 1; }
+    75%  { opacity: 1; }
+    100% {
+      opacity: 0;
+      transform: translate3d(var(--bubble-drift, 4px), calc(-1 * var(--bubble-travel, 100px)), 0) scale(1);
+    }
   }
   /* One wavelength of horizontal travel — the wave path repeats at exactly
      this interval, so the loop is seamless. */

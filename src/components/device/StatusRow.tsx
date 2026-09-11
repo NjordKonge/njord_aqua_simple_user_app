@@ -1,4 +1,4 @@
-import { HelpCircle } from "lucide-react";
+import { HelpCircle, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Tone } from "@/lib/device/status";
 
@@ -40,11 +40,16 @@ export function StatusRow({
   label,
   message,
   onInfo,
+  onDismiss,
 }: {
   tone: Tone;
   label: string;
   message: string;
   onInfo: () => void;
+  /** When provided, a close button is shown. Only passed for error states —
+   *  a normal "Safe to use" row is a live readout, not a notification, and
+   *  there would be nothing to dismiss. */
+  onDismiss?: () => void;
 }) {
   const toneColor = TONE_VAR[tone];
   return (
@@ -62,10 +67,19 @@ export function StatusRow({
       <button
         aria-label="More information"
         onClick={onInfo}
-        className="press -mr-1 -mt-1 flex h-9 w-9 items-center justify-center rounded-full text-faint"
+        className="press -mt-1 flex h-9 w-9 items-center justify-center rounded-full text-faint"
       >
         <HelpCircle size={19} />
       </button>
+      {onDismiss ? (
+        <button
+          aria-label="Dismiss"
+          onClick={onDismiss}
+          className="press -mr-1 -mt-1 flex h-9 w-9 items-center justify-center rounded-full text-faint"
+        >
+          <X size={19} />
+        </button>
+      ) : null}
     </div>
   );
 }

@@ -21,11 +21,10 @@ import { Header } from "@/components/layout/Header";
 import { StatusRow } from "@/components/device/StatusRow";
 import { TankGraphic } from "@/components/device/TankGraphic";
 import { DeviceCard } from "@/components/device/DeviceCard";
-import { ElectrolysisCell } from "@/components/device/ElectrolysisCell";
+import { ElectrolysisStatusPanel } from "@/components/device/ElectrolysisStatusPanel";
 import { InfoSheet } from "@/components/ui/InfoSheet";
 import { Button } from "@/components/ui/Button";
 import { SpeedDial } from "@/components/ui/SpeedDial";
-import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EmptyState } from "@/components/ui/Skeleton";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { cn } from "@/lib/utils";
@@ -63,6 +62,13 @@ function HomeScreen() {
   const [infoOpen, setInfoOpen] = useState(false);
   const [modeInfoOpen, setModeInfoOpen] = useState(false);
 
+  // Which error the user has closed. Stored as the error's own text rather
+  // than a boolean so dismissal only ever applies to *that* error: if the
+  // fault changes, or clears and later comes back, the row returns on its
+  // own. A plain boolean would let one tap permanently silence every future
+  // fault, which is not something a water-treatment device should allow.
+  const [dismissedError, setDismissedError] = useState<string | null>(null);
+
   // Optimistic mode display: SETCFG/START/STOP round-trip over BLE (ack,
   // then a separate config re-read) before `dosingMode` derived from the
   // real config catches up — visibly laggy otherwise. Show the tapped mode
@@ -85,6 +91,10 @@ function HomeScreen() {
   // Full-scale values for the two speed dials. Installation-specific, so
   // they're phone-local settings rather than constants (see gaugeSettings).
   const gaugeRanges = useGaugeRanges();
+
+  // Only a genuine fault is closable, and only until it changes.
+  const isError = waterStatus.status === "error";
+  const showStatusRow = !isError || dismissedError !== waterStatus.message;
 
   // One place deciding what the electrolysis badge says, so the wording and
   // the cell animation can never disagree about whether it's running.
@@ -178,21 +188,24 @@ function HomeScreen() {
         }
       />
 
-      <StatusRow
-        tone={waterStatus.tone}
-        label={waterStatus.label}
-        message={waterStatus.message}
-        onInfo={() => setInfoOpen(true)}
-      />
+{showStatusRow ? (
+        <StatusRow
+          tone={waterStatus.tone}
+          label={waterStatus.label}
+          message={waterStatus.message}
+          onInfo={() => setInfoOpen(true)}
+          onDismiss={isError ? () => setDismissedError(waterStatus.message) : undefined}
+        />
+      ) : null}
 
-      {/* LIVE WATER — the primary panel. Everything that is true *right now*
-          lives here: the control that drives the process, the two live
+      {/* WATER CONTROL — the primary panel. Everything that is true *right
+          now* lives here: the control that drives the process, the two live
           readings, and the process itself. A lighter blue than the tank card
           below so the two blue surfaces read as separate cards rather than
           one long slab. */}
       <section className="surface-lift overflow-hidden rounded-card border border-white/10 bg-water">
         <div className="flex items-center justify-between gap-3 px-4 pt-4">
-          <p className="type-heading text-on-fill">Live water</p>
+          <p className="type-heading text-on-fill">Water control</p>
           <button
             aria-label="More information"
             onClick={() => setModeInfoOpen(true)}
@@ -206,6 +219,7 @@ function HomeScreen() {
             readings it drives — set it here, see the result immediately
             below, rather than in a separate card elsewhere on the screen. */}
         <div className="px-4 pt-3">
+          <p className="mb-1.5 type-cap text-on-fill/55">Treatment setting</p>
           <DosingModeToggle
             mode={displayedMode}
             onChange={(mode) => {
@@ -251,18 +265,15 @@ function HomeScreen() {
         </div>
 
         <div className="mt-4 px-4">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <span className="type-cap text-on-fill/60">Electrolysis</span>
-            <StatusBadge
-              tone={electrolysisBadge.tone}
-              label={electrolysisBadge.label}
-              pulse={electrolysisOn && device.online}
-            />
-          </div>
-          {/* The process itself, not a number about it — bubbles exist only
-              while current is actually flowing, so a still cell is an
-              unambiguous "nothing is being produced right now". */}
-          <ElectrolysisCell active={electrolysisOn && device.online} />
+          {/* Status only — no electrode illustration. The words are what
+              carry the meaning, so they get the size; the bubbles behind
+              them are ambient texture for "current is flowing" and nothing
+              more. */}
+          <ElectrolysisStatusPanel
+            tone={electrolysisBadge.tone}
+            label={electrolysisBadge.label}
+            active={electrolysisOn && device.online}
+          />
         </div>
 
         <div className="h-4" />
