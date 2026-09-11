@@ -33,6 +33,14 @@
 
   --color-brand: #17658a;
   --color-brand-deep: #0f4c68;
+  /* Lighter blue for the live-water panel, so the two blue cards on Home
+     read as distinct surfaces rather than one long slab. Still dark enough
+     for white body text (~5.5:1). */
+  --color-water: #1f6f95;
+  /* The water itself inside the tank illustration — deliberately brighter
+     and greener than the brand blues so a filled tank reads as liquid, not
+     as another panel. */
+  --color-water-fill: #4fb3d9;
   /* Restrained accent — sparingly, for the one UI "selected/elevated"
      highlight that isn't itself a device-safety status (High chlorination
      mode). Not used for navigation or dropdown selection, which stay blue. */
@@ -70,6 +78,15 @@
   --animate-pop: pop 0.24s var(--ease-out-soft) both;
   /* Skeleton placeholder sweep while real content loads. */
   --animate-shimmer: shimmer 1.4s linear infinite;
+  /* Electrolysis cell: gas bubbles detaching from an electrode and rising.
+     Per-bubble delay/duration/drift are set inline so they don't march in
+     lockstep — real evolution is irregular. */
+  --animate-bubble: bubble-rise 2.8s linear infinite;
+  /* Tank water surface. Two copies of the same wave translate by exactly one
+     wavelength at different speeds, which reads as a gentle swell without
+     any single obvious repeating shape. */
+  --animate-wave-front: wave-shift 5s linear infinite;
+  --animate-wave-back: wave-shift 8s linear infinite reverse;
 
   @keyframes rise {
     from { opacity: 0; transform: translate3d(0, 6px, 0); }
@@ -98,6 +115,20 @@
   @keyframes shimmer {
     from { background-position: -160% 0; }
     to   { background-position: 260% 0; }
+  }
+  /* Bubble travels the full height of the cell, fading in as it detaches and
+     out again as it reaches the surface, with a slight sideways drift. */
+  @keyframes bubble-rise {
+    0%   { opacity: 0; transform: translate3d(0, 0, 0) scale(0.6); }
+    12%  { opacity: 0.9; }
+    80%  { opacity: 0.75; }
+    100% { opacity: 0; transform: translate3d(var(--bubble-drift, 4px), -100%, 0) scale(1); }
+  }
+  /* One wavelength of horizontal travel — the wave path repeats at exactly
+     this interval, so the loop is seamless. */
+  @keyframes wave-shift {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-342px); }
   }
 }
 

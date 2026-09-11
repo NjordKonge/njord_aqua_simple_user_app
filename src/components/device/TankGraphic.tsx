@@ -1,37 +1,68 @@
 import { cn } from "@/lib/utils";
 
 const TANK_IMAGE_SRC = "/Njord_icon_app.png";
-// Intrinsic pixel size of the artwork (public/Njord_icon_app.png). Used to
-// lock an inner box to the SAME aspect ratio the image itself renders at
-// (see the `aspectRatio` box below) so the clip-paths further down — which
-// are expressed as fixed percentages of the artwork's own canvas — stay
-// pixel-accurate no matter what shape the outer container is, instead of
-// drifting whenever object-contain/mask-size:contain letterboxes the art.
+// Intrinsic pixel size of the artwork (public/Njord_icon_app.png). Every
+// coordinate below is expressed in this canvas, and the SVG overlay shares
+// the same viewBox, so the water lines up with the drawn tank exactly.
 const TANK_IMAGE_W = 684;
 const TANK_IMAGE_H = 512;
+
+// Silhouette of the barrel's interior. Rather than eyeballing this, the
+// coordinates were read off the artwork's own alpha channel (per-row first
+// and last inked pixel): the body has dead-straight sides at x=56 and x=627
+// running from the base of the domed top down to y=424, where the bottom
+// ellipse (centre y=424, rx≈285, ry≈72) takes over. The two cubics below are
+// quarter-ellipse approximations of that bottom, so the water settles into
+// the curve of the tank floor instead of sitting on a flat line.
+const TANK_BODY_PATH = `
+  M 56 132
+  L 56 424
+  C 56 464 184 496 341.5 496
+  C 499 496 627 464 627 424
+  L 627 132
+  Z
+`;
+
+// Waterline positions, in artwork coordinates: y for a full tank and y for
+// an empty one. Full stops just below the top rim rather than at it, so a
+// 100% tank still reads as a tank with water in it, not a solid block.
+const WATER_FULL_Y = 140;
+const WATER_EMPTY_Y = 496;
+
+// One wavelength of the surface wave. The wave path repeats at exactly this
+// interval and the keyframe translates by exactly this much, so the loop has
+// no visible seam. (Kept in sync with `wave-shift` in styles.css.)
+const WAVE_LEN = 342;
+const WAVE_AMP = 9;
+const HALF = WAVE_LEN / 2;
+const QUARTER = WAVE_LEN / 4;
+
+/** One full sine-ish cycle as two quadratic arcs: crest then trough. */
+const CYCLE = `q ${QUARTER} ${-WAVE_AMP} ${HALF} 0 q ${QUARTER} ${WAVE_AMP} ${HALF} 0 `;
+// Five wavelengths, starting one wavelength to the left of the canvas, so
+// the shape still covers the full width at either end of its travel.
+const WAVE_PATH = `M ${-WAVE_LEN} 0 ${CYCLE.repeat(5)} L ${WAVE_LEN * 4} 620 L ${-WAVE_LEN} 620 Z`;
+
 // Fixed bounding box (as % of the artwork canvas) of just the drop-in
 // probe/electrode capsule hanging inside the tank — NOT the water level,
 // which is why this is a constant rather than derived from `percent`.
-// Measured directly off the PNG (see conversation history for the pixel
-// scan); kept generous by a few px on each side.
 const PROBE_CLIP = "inset(41% 46% 39% 46%)";
 
 /**
- * Tank artwork: the actual Njord tank render (public/Njord_icon_app.png),
- * used as a liquid-fill icon rather than a hand-drawn silhouette.
+ * Tank artwork: the actual Njord tank render (public/Njord_icon_app.png)
+ * with real water in it.
  *
- * The trick is the same one battery/thermometer "fill" icons use: the SAME
- * transparent PNG is drawn twice, stacked exactly on top of itself —
- *   1. a dimmed grayscale copy underneath, always fully visible (the "empty"
- *      read), and
- *   2. a copy on top that is CSS-masked to its own ink (so only the
- *      artwork's lines/panels pick up colour, never the transparent
- *      background), tinted with the fill colour, and clipped from the top so
- *      only the bottom `percent`% of it shows.
- * Because both copies are pixel-identical, the coloured "waterline" always
- * lines up perfectly with the real artwork no matter how intricate its
- * silhouette is — no manual path-tracing required. A soft shimmer sweeps
- * across the fill (masked the same way) so it doesn't read as a static tint.
+ * The artwork is white line-art on transparent, so the water is drawn as a
+ * filled shape BEHIND it, clipped to the barrel's interior silhouette. That
+ * fills the body of the tank rather than just tinting its outlines, and the
+ * line-art then sits on top and reads as the tank's structure seen through
+ * the water.
+ *
+ * The surface is two copies of the same wave travelling at different speeds
+ * in opposite directions. Their crests and troughs drift in and out of
+ * phase, which gives the level a gentle swell without any single obviously
+ * repeating shape — and because each copy translates by exactly one
+ * wavelength, the loop is seamless.
  */
 export function TankGraphic({
   percent,
@@ -57,15 +88,14 @@ export function TankGraphic({
   showCaption?: boolean;
 }) {
   const clamped = percent === null ? 0 : Math.max(0, Math.min(100, percent));
-  // The card behind this artwork is dark (brand-deep, #0f4c68 — see
-  // index.tsx) so the water fill needs its own brighter tint: the ordinary
-  // --color-brand is too close in lightness to brand-deep to read clearly
-  // against it (contrast ratio ~1.4:1). This lighter sky-blue keeps a
-  // "water" hue while giving a real ~3.9:1 contrast against the backdrop.
-  const fillColor = low ? "var(--color-warn)" : "#4fb3d9";
+  // The card behind this artwork is dark (brand-deep) so the water needs its
+  // own brighter tint: the ordinary --color-brand is too close in lightness
+  // to brand-deep to read against it. --color-water-fill keeps a "water" hue
+  // while giving real contrast; a low tank switches to the warn tone.
+  const fillColor = low ? "var(--color-warn)" : "var(--color-water-fill)";
   const showWater = hasReading && clamped > 0;
-  // Reveal the bottom `clamped`% by clipping away the top (100 - clamped)%.
-  const clipInset = `${100 - clamped}% 0 0 0`;
+  const waterY = WATER_FULL_Y + (1 - clamped / 100) * (WATER_EMPTY_Y - WATER_FULL_Y);
+
   const maskStyle = {
     WebkitMaskImage: `url(${TANK_IMAGE_SRC})`,
     maskImage: `url(${TANK_IMAGE_SRC})`,
@@ -81,44 +111,60 @@ export function TankGraphic({
     <div className="flex h-full w-full flex-col items-center">
       <div className="relative w-full min-h-0 flex-1">
         {/* Locked to the artwork's own aspect ratio and centered — mirrors
-            exactly how object-contain/mask-size:contain place the image
-            within a differently-shaped outer box, so every clip-path below
-            (expressed as % of the artwork canvas) lines up with the real
-            silhouette instead of drifting with letterbox/pillarbox gaps. */}
+            exactly how object-contain places the image within a
+            differently-shaped outer box, so the SVG overlay (which shares
+            the artwork's viewBox) stays registered with the drawing instead
+            of drifting with letterbox/pillarbox gaps. */}
         <div
           className="absolute inset-0 m-auto"
           style={{ aspectRatio: `${TANK_IMAGE_W} / ${TANK_IMAGE_H}`, maxWidth: "100%", maxHeight: "100%" }}
         >
-          {/* Base artwork, dimmed — the "empty" read, always visible. */}
+          {/* WATER — behind the line-art, clipped to the barrel interior. */}
+          <svg
+            aria-hidden
+            viewBox={`0 0 ${TANK_IMAGE_W} ${TANK_IMAGE_H}`}
+            className="absolute inset-0 h-full w-full transition-opacity duration-700"
+            style={{ opacity: showWater ? 1 : 0 }}
+          >
+            <defs>
+              <clipPath id="njord-tank-body">
+                <path d={TANK_BODY_PATH} />
+              </clipPath>
+            </defs>
+            <g clipPath="url(#njord-tank-body)">
+              {/* Outer group carries the level; the inner groups carry the
+                  wave travel, so the two transforms don't fight over the
+                  same property. */}
+              <g
+                style={{
+                  transform: `translateY(${waterY}px)`,
+                  transition: "transform 700ms var(--ease-out-soft)",
+                }}
+              >
+                <g className="animate-wave-back">
+                  <path d={WAVE_PATH} fill={fillColor} opacity={0.45} transform="translate(-85 -6)" />
+                </g>
+                <g className="animate-wave-front">
+                  <path d={WAVE_PATH} fill={fillColor} />
+                </g>
+              </g>
+            </g>
+          </svg>
+
+          {/* Line-art, on top of the water so the tank's structure reads
+              through it. */}
           <img
             src={TANK_IMAGE_SRC}
             alt="Water tank"
             className="absolute inset-0 h-full w-full object-contain transition-opacity duration-700"
-            style={{ opacity: showWater ? 0.35 : 0.6, filter: "grayscale(1) brightness(1.3)" }}
+            style={{ opacity: showWater ? 0.85 : 0.6 }}
           />
 
-          {/* Coloured fill: same artwork, masked to its own ink, clipped from
-              the top so only the bottom `clamped`% is revealed. The clip
-              transition is the only "water motion" — brief and tied to an
-              actual level update, not a looping effect. */}
-          <div
-            aria-hidden
-            className="absolute inset-0 overflow-hidden transition-[clip-path] duration-700 ease-[var(--ease-out-soft)]"
-            style={{ clipPath: `inset(${clipInset})`, WebkitClipPath: `inset(${clipInset})` }}
-          >
-            <div
-              className="relative h-full w-full transition-opacity duration-700"
-              style={{ opacity: showWater ? 1 : 0, ...maskStyle }}
-            >
-              <div className="absolute inset-0" style={{ backgroundColor: fillColor }} />
-            </div>
-          </div>
-
-          {/* Drop-in electrolysis probe: same artwork masked to its own ink
-              again, but clipped to a FIXED box around just the probe capsule
-              (not the water level) — tinted green while the electrode is
-              actively being driven right now. A gentle opacity heartbeat
-              (no glow, no scale) marks it as live rather than a static tint. */}
+          {/* Drop-in electrolysis probe: the same artwork masked to its own
+              ink, clipped to a FIXED box around just the probe capsule (not
+              the water level) — tinted green while the electrode is actively
+              being driven right now. A gentle opacity heartbeat (no glow, no
+              scale) marks it as live rather than a static tint. */}
           <div
             aria-hidden
             className="absolute inset-0 overflow-hidden"
@@ -147,4 +193,3 @@ export function TankGraphic({
     </div>
   );
 }
-

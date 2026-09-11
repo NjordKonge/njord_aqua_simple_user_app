@@ -19,6 +19,14 @@ import {
 import { useTankModel, setTankModel, TANK_MODEL_LABEL, type TankModel } from "@/lib/settings/tankSettings";
 import { useChlorinationLevels, setChlorinationLevels } from "@/lib/settings/chlorinationSettings";
 import {
+  useGaugeRanges,
+  setGaugeRanges,
+  TEMP_MAX_MIN,
+  TEMP_MAX_MAX,
+  WATTS_MAX_MIN,
+  WATTS_MAX_MAX,
+} from "@/lib/settings/gaugeSettings";
+import {
   theoreticalMaxChargeC,
   TARGET_CURRENT_MIN_MA,
   TARGET_CURRENT_MAX_MA,
@@ -78,6 +86,7 @@ function SettingsScreen() {
 
   const tankModel = useTankModel();
   const chlorinationLevels = useChlorinationLevels();
+  const gaugeRanges = useGaugeRanges();
   const [tankModelOpen, setTankModelOpen] = useState(false);
   const [tankVolumeOpen, setTankVolumeOpen] = useState(false);
   const [waterSourceOpen, setWaterSourceOpen] = useState(false);
@@ -241,10 +250,38 @@ function SettingsScreen() {
         />
       </section>
 
+      {/* Dial ranges */}
+      <section className="surface-lift space-y-3 rounded-card border border-border-soft bg-surface p-4">
+        <p className="type-cap text-faint">Dial ranges</p>
+        <p className="text-xs leading-relaxed text-muted">
+          Full-scale values for the two speed dials on the Home screen. A dial is only readable
+          when its range roughly matches what this installation actually sees — a 0-100 W dial
+          sitting at 3 W all day conveys nothing. These affect the display only; they do not
+          change how the device operates.
+        </p>
+        <RangeField
+          label="Temperature dial max"
+          value={gaugeRanges.tempMaxC}
+          min={TEMP_MAX_MIN}
+          max={TEMP_MAX_MAX}
+          unit="°C"
+          onCommit={(v) => setGaugeRanges({ ...gaugeRanges, tempMaxC: v })}
+        />
+        <RangeField
+          label="Power dial max"
+          value={gaugeRanges.wattsMax}
+          min={WATTS_MAX_MIN}
+          max={WATTS_MAX_MAX}
+          unit="W"
+          onCommit={(v) => setGaugeRanges({ ...gaugeRanges, wattsMax: v })}
+        />
+      </section>
+
       {/* Alert information */}
       <Button variant="secondary" onClick={() => setAlertInfoOpen(true)}>
         Alert information
       </Button>
+
 
       <PickerSheet<TankModel>
         open={tankModelOpen}
@@ -293,8 +330,67 @@ function SettingsScreen() {
   );
 }
 
-function PercentChargeField({
+/**
+ * Phone-local numeric field for a dial's full-scale value. Unlike the device
+ * config fields below, `value` can only change from this control, so there's
+ * no need to re-sync text from a prop.
+ */
+function RangeField({
   label,
+  value,
+  min,
+  max,
+  unit,
+  onCommit,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  unit: string;
+  onCommit: (value: number) => void;
+}) {
+  const [text, setText] = useState(String(value));
+  const { saved, flash } = useSavedFlash();
+
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <label className="flex items-center gap-2 text-sm text-content">
+        {label}
+        <SavedFlash show={saved} />
+      </label>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          inputMode="numeric"
+          min={min}
+          max={max}
+          step={1}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={() => {
+            const parsed = Math.round(Number(text));
+            const next =
+              Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : value;
+            setText(String(next));
+            if (next !== value) {
+              onCommit(next);
+              flash();
+            }
+          }}
+          className={cn(
+            "w-24 rounded-inner border bg-surface px-3 py-2.5 text-right tnum text-content transition-colors",
+            "focus:border-brand focus:outline-none",
+            saved ? "border-good" : "border-border",
+          )}
+        />
+        <span className="w-12 type-label text-faint">{unit}</span>
+      </div>
+    </div>
+  );
+}
+
+function PercentChargeField({  label,
   percent,
   cycleSeconds,
   targetMa,

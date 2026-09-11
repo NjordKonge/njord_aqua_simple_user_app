@@ -1,32 +1,30 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Settings as SettingsIcon,
-  Thermometer,
-  Zap,
-  Droplets,
   HelpCircle,
   Gauge as GaugeIcon,
   BluetoothSearching,
   AlertTriangle,
 } from "lucide-react";
-import { useDevices, useCommands, useTelemetry, sendCommand } from "@/lib/device/store";
+import { useDevices, useCommands, sendCommand } from "@/lib/device/store";
 import type { CommandEntry } from "@/lib/device/types";
 import { useDeviceSummary } from "@/lib/device/useDeviceSummary";
 import { startTreatment, stopTreatment, clearFault, pairDevice } from "@/lib/device/actions";
 import { requestTankReading } from "@/lib/device/tank";
 import { setDosingMode, type DosingMode } from "@/lib/device/dosing";
 import { formatRelativeAgo } from "@/lib/device/history";
+import { useGaugeRanges } from "@/lib/settings/gaugeSettings";
 import { playModeChangeFeedback, playConfirmFeedback, playAbortFeedback } from "@/lib/ui/feedback";
 import { BUILD_TAG } from "@/lib/buildInfo";
 import { Header } from "@/components/layout/Header";
 import { StatusRow } from "@/components/device/StatusRow";
 import { TankGraphic } from "@/components/device/TankGraphic";
 import { DeviceCard } from "@/components/device/DeviceCard";
+import { ElectrolysisCell } from "@/components/device/ElectrolysisCell";
 import { InfoSheet } from "@/components/ui/InfoSheet";
 import { Button } from "@/components/ui/Button";
-import { SectionHeader } from "@/components/ui/SectionHeader";
-import { MetricTile } from "@/components/ui/MetricTile";
+import { SpeedDial } from "@/components/ui/SpeedDial";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EmptyState } from "@/components/ui/Skeleton";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
@@ -84,18 +82,19 @@ function HomeScreen() {
   const displayedMode = pendingMode ?? dosingMode;
   const commands = useCommands(device?.id);
 
-  // Recent live samples, purely to give the metric tiles a sparkline —
-  // "which way is this heading" context that a bare number can't carry.
-  // Read-only use of telemetry the store already collects; nothing extra is
-  // requested from the device for this.
-  const telemetry = useTelemetry(device?.id);
-  const trends = useMemo(() => {
-    const recent = telemetry.slice(-32);
-    return {
-      temp: recent.map((s) => s.temp_c),
-      watts: recent.map((s) => (s.elec_ma * s.supply_mv) / 1_000_000),
-    };
-  }, [telemetry]);
+  // Full-scale values for the two speed dials. Installation-specific, so
+  // they're phone-local settings rather than constants (see gaugeSettings).
+  const gaugeRanges = useGaugeRanges();
+
+  // One place deciding what the electrolysis badge says, so the wording and
+  // the cell animation can never disagree about whether it's running.
+  const electrolysisBadge = !device?.online
+    ? { tone: "bad" as const, label: "Offline" }
+    : electrolysisState === "on"
+      ? { tone: "good" as const, label: "Running" }
+      : electrolysisState === "waiting"
+        ? { tone: "warn" as const, label: "Done for cycle" }
+        : { tone: "bad" as const, label: "Off" };
 
   useEffect(() => {
     if (pendingMode === null) return;
@@ -186,6 +185,89 @@ function HomeScreen() {
         onInfo={() => setInfoOpen(true)}
       />
 
+      {/* LIVE WATER — the primary panel. Everything that is true *right now*
+          lives here: the control that drives the process, the two live
+          readings, and the process itself. A lighter blue than the tank card
+          below so the two blue surfaces read as separate cards rather than
+          one long slab. */}
+      <section className="surface-lift overflow-hidden rounded-card border border-white/10 bg-water">
+        <div className="flex items-center justify-between gap-3 px-4 pt-4">
+          <p className="type-heading text-on-fill">Live water</p>
+          <button
+            aria-label="More information"
+            onClick={() => setModeInfoOpen(true)}
+            className="press rounded-full p-1 text-on-fill/70"
+          >
+            <HelpCircle size={18} />
+          </button>
+        </div>
+
+        {/* The mode control sits at the top of the panel, directly above the
+            readings it drives — set it here, see the result immediately
+            below, rather than in a separate card elsewhere on the screen. */}
+        <div className="px-4 pt-3">
+          <DosingModeToggle
+            mode={displayedMode}
+            onChange={(mode) => {
+              setPendingMode(mode);
+              playModeChangeFeedback(mode);
+              // setDosingMode is async (STOP is awaited before SETCFG/START are
+              // sent, in series). onEntry reports each step's command entry as
+              // it's sent, so the ref always reflects the currently in-flight
+              // (or just-failed) command instead of only the last one.
+              pendingEntryRef.current = null;
+              void setDosingMode(device.id, mode, cycleSeconds, targetMa, (entry) => {
+                pendingEntryRef.current = entry;
+              });
+            }}
+          />
+        </div>
+
+        {/* Two speed dials. Both are bounded magnitudes with a meaningful
+            full scale, which is exactly what a dial is for — the needle's
+            position says "low/normal/high" before the number is read. Their
+            ranges are installation-specific, so they're set in Settings. */}
+        <div className="mt-4 flex items-start justify-center gap-6 px-4">
+          <SpeedDial
+            value={health?.temperature.available ? health.temperature.celsius : null}
+            max={gaugeRanges.tempMaxC}
+            unit="°C"
+            label="Water temp"
+            size={128}
+          />
+          <SpeedDial
+            value={watts}
+            max={gaugeRanges.wattsMax}
+            unit="W"
+            label="Power"
+            size={128}
+            // "waiting" = this cycle's charge target is already reached and
+            // the electrode is holding for the next cycle — a normal part of
+            // the dosing workflow, not a fault, but a flat "0 W" reads as
+            // broken/stuck. Say so explicitly instead. (watts is 0 for every
+            // other non-"on" state, so this is purely a label choice.)
+            placeholder={electrolysisState === "waiting" ? "Waiting\u2026" : undefined}
+          />
+        </div>
+
+        <div className="mt-4 px-4">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <span className="type-cap text-on-fill/60">Electrolysis</span>
+            <StatusBadge
+              tone={electrolysisBadge.tone}
+              label={electrolysisBadge.label}
+              pulse={electrolysisOn && device.online}
+            />
+          </div>
+          {/* The process itself, not a number about it — bubbles exist only
+              while current is actually flowing, so a still cell is an
+              unambiguous "nothing is being produced right now". */}
+          <ElectrolysisCell active={electrolysisOn && device.online} />
+        </div>
+
+        <div className="h-4" />
+      </section>
+
       {/* Tank gets its own full-width card with a generous fixed height —
           sharing a row with the 3 metric cards capped it to ~60% of the
           screen width and whatever height the metrics stack happened to be,
@@ -195,7 +277,7 @@ function HomeScreen() {
           itself is white line-art on a transparent PNG (designed to sit on
           a dark surface), so a white card made it unreadable — "white on
           white". brand-deep gives it back the contrast it needs, for both
-          the outline and the coloured fill level. */}
+          the outline and the water fill. */}
       <div className="surface-lift overflow-hidden rounded-card border border-white/10 bg-brand-deep">
         <div className="flex items-center justify-between gap-3 px-4 pt-4">
           <p className="truncate type-heading text-on-fill">{name}</p>
@@ -217,7 +299,7 @@ function HomeScreen() {
           />
         </div>
 
-        {/* Level / volume / capacity as a typographic strip rather than one
+        {/* Level / volume / water used as a typographic strip rather than one
             run-on caption: the figure carries the weight, the word beneath
             it stays small and quiet, so the numbers are scannable at a
             glance and the labels never compete with them. */}
@@ -231,71 +313,13 @@ function HomeScreen() {
           <TankStat
             value={tank.hasReading ? tank.liters : null}
             unit="L"
-            label="Volume"
+            label={`of ${tank.capacityLiters}L`}
             emphasis={tank.low ? "warn" : "normal"}
           />
-          <TankStat value={tank.capacityLiters} unit="L" label="Capacity" emphasis="quiet" />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-3">
-        <MetricTile
-          icon={Thermometer}
-          label="Water temp"
-          tone="info"
-          value={health?.temperature.available ? health.temperature.celsius : null}
-          unit="°C"
-          trend={trends.temp}
-        />
-        <MetricTile
-          icon={Zap}
-          label="Power"
-          tone="warn"
-          value={watts}
-          unit="W"
-          trend={trends.watts}
-          // "waiting" = this cycle's charge target is already reached and
-          // the electrode is holding for the next cycle — a normal part of
-          // the dosing workflow, not a fault, but a flat "0 W" reads as
-          // broken/stuck. Say so explicitly instead. (watts is 0 for every
-          // other non-"on" state, so this is purely a label choice.)
-          placeholderText={
-            electrolysisState === "waiting" ? "Waiting\u2026" : watts === null ? "—" : undefined
-          }
-        />
-        <MetricTile icon={Droplets} label="Water used" tone="info" value={null} placeholderText="N/A" />
-      </div>
-
-      <div>
-        <SectionHeader
-          title="Chlorination mode"
-          action={
-            <button
-              aria-label="More information"
-              onClick={() => setModeInfoOpen(true)}
-              className="press rounded-full p-1 text-faint"
-            >
-              <HelpCircle size={18} />
-            </button>
-          }
-        />
-        <div className="space-y-3">
-          <LiveElectrolysisStatus online={device.online} state={electrolysisState} />
-          <DosingModeToggle
-            mode={displayedMode}
-            onChange={(mode) => {
-              setPendingMode(mode);
-              playModeChangeFeedback(mode);
-              // setDosingMode is async (STOP is awaited before SETCFG/START are
-              // sent, in series). onEntry reports each step's command entry as
-              // it's sent, so the ref always reflects the currently in-flight
-              // (or just-failed) command instead of only the last one.
-              pendingEntryRef.current = null;
-              void setDosingMode(device.id, mode, cycleSeconds, targetMa, (entry) => {
-                pendingEntryRef.current = entry;
-              });
-            }}
-          />
+          {/* Water used — NOT AVAILABLE: the firmware has no flow sensor, so
+              there is no data source for litres consumed. Shown as an
+              explicit blank rather than a fabricated number. */}
+          <TankStat value={null} unit="L" label="Water used" emphasis="quiet" />
         </div>
       </div>
 
@@ -422,45 +446,6 @@ function TankStat({
   );
 }
 
-/**
- * Single physical-LED-style row: a traffic-light readout of the electrode's
- * real-time drive state (LiveStatus.phase / `ph`), replacing the previous
- * two-LED "Chlorination" + "Electrolysis" bar.
- *  - Green (on):      actively driving current right now.
- *  - Yellow (waiting): this cycle's charge target is already reached; the
- *    electrode is holding until the next cycle starts (or, while offline
- *    momentarily reconnecting mid-cycle, the last known driving state).
- *  - Red (off):        not running an electrolysis cycle at all — Chlorination
- *    is Off, the device is offline, or a fault stopped it.
- *
- * Only the "on" (green) state pulses — the others stay steady.
- */
-function LiveElectrolysisStatus({
-  online,
-  state,
-}: {
-  online: boolean;
-  state: "on" | "waiting" | "off";
-}) {
-  const effective = online ? state : "off";
-  const badge = !online
-    ? { tone: "bad" as const, label: "Offline" }
-    : effective === "on"
-      ? { tone: "good" as const, label: "Running" }
-      : effective === "waiting"
-        ? { tone: "warn" as const, label: "Done for cycle" }
-        : { tone: "bad" as const, label: "Off" };
-
-  return (
-    <div className="surface-lift flex items-center justify-between gap-3 rounded-card border border-border-soft bg-surface px-3.5 py-3">
-      <span className="type-cap text-faint">Live electrolysis</span>
-      {/* Only a genuinely-running electrode gets the pulsing dot; the other
-          states are steady, so the motion keeps meaning "right now". */}
-      <StatusBadge tone={badge.tone} label={badge.label} pulse={effective === "on" && online} />
-    </div>
-  );
-}
-
 
 function DosingModeToggle({
   mode,
@@ -499,7 +484,9 @@ function DosingModeToggle({
     // colour) rather than three independently-toggling backgrounds — the
     // travel is what makes a mode change feel like moving a physical switch,
     // and it also visually connects the mode you left to the one you chose.
-    <div className="surface-lift relative grid grid-cols-3 gap-2 rounded-card border border-border-soft bg-surface-muted p-1">
+    // Sits on the blue live-water panel, so the trough is a translucent
+    // white rather than the light-surface tokens used elsewhere.
+    <div className="relative grid grid-cols-3 gap-2 rounded-card border border-white/10 bg-black/15 p-1">
       <span
         aria-hidden
         className="absolute inset-y-1 left-1 rounded-[calc(var(--radius-card)-0.25rem)] transition-all duration-200 ease-[var(--ease-standard)]"
@@ -516,7 +503,7 @@ function DosingModeToggle({
           className={cn(
             "relative rounded-card px-3 py-3 text-sm font-medium transition-colors duration-150",
             "active:scale-[0.98] transition-transform",
-            opt.value === mode ? SELECTED_TEXT[opt.value] : "text-muted",
+            opt.value === mode ? SELECTED_TEXT[opt.value] : "text-on-fill/65",
           )}
         >
           {opt.label}
