@@ -58,10 +58,8 @@ export function MiniLineChart({
   const padBottom = 18;
   const padTop = 8;
   const values = data.map((d) => d.v);
-  const min = Math.min(...values);
+  let min = Math.min(...values);
   const max = Math.max(...values);
-  const mid = (min + max) / 2;
-  const span = max - min || 1;
 
   const plotW = width - padLeft;
   const plotH = height - padBottom - padTop;
@@ -69,17 +67,50 @@ export function MiniLineChart({
   const tMax = data[data.length - 1].t || tMin + 1;
   const tSpan = tMax - tMin || 1;
 
+  // A "gap" is a run of time between two consecutive samples much longer
+  // than the data's own typical sampling interval — e.g. the device was
+  // offline, or the flash log simply has nothing recorded for that stretch.
+  // Interpolating a straight line across that silently implied data that
+  // was never actually recorded, so gaps are drawn instead as a dashed line
+  // pinned to 0, disconnected from the real values on either side.
+  // `gapAfter[i]` marks a gap between `data[i]` and `data[i + 1]`.
+  const gapAfter: boolean[] = data.map(() => false);
+  if (data.length >= 3) {
+    const deltas: number[] = [];
+    for (let i = 1; i < data.length; i++) deltas.push(data[i].t - data[i - 1].t);
+    const sorted = [...deltas].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)] || 1;
+    const gapThreshold = median * 4;
+    for (let i = 1; i < data.length; i++) {
+      if (data[i].t - data[i - 1].t > gapThreshold) gapAfter[i - 1] = true;
+    }
+  }
+  const hasGap = gapAfter.some(Boolean);
+  // Guarantee 0 falls inside the plotted domain when a gap needs to be
+  // drawn there — otherwise the dashed "no data" line could sit off-screen
+  // above or below the visible plot.
+  if (hasGap) min = Math.min(min, 0);
+  const mid = (min + max) / 2;
+  const span = max - min || 1;
+
   const xy = data.map((d) => ({
     x: padLeft + ((d.t - tMin) / tSpan) * plotW,
     y: padTop + (1 - (d.v - min) / span) * plotH,
   }));
-  const points = xy.map((p) => `${p.x},${p.y}`).join(" ");
   const baseline = padTop + plotH;
-  // Same path as the line, closed down to the baseline, for the area fill.
-  const areaPoints = `${xy[0].x},${baseline} ${points} ${xy[xy.length - 1].x},${baseline}`;
   const last = xy[xy.length - 1];
 
   const yAt = (v: number) => padTop + (1 - (v - min) / span) * plotH;
+  const zeroY = yAt(0);
+
+  // Split the samples into contiguous segments at each gap so the line and
+  // area fill never bridge a gap as if it were real, continuous data.
+  const segments: number[][] = [[0]];
+  for (let i = 1; i < xy.length; i++) {
+    if (gapAfter[i - 1]) segments.push([i]);
+    else segments[segments.length - 1].push(i);
+  }
+
 
   const nearestIndex = (clientX: number) => {
     const svg = svgRef.current;
@@ -160,16 +191,50 @@ export function MiniLineChart({
           </g>
         ))}
 
-        <polygon points={areaPoints} fill={`url(#area-${gradId})`} />
+        {/* Real data, drawn per contiguous segment so a gap never gets
+            bridged by a line/fill that implies data which wasn't actually
+            recorded. Isolated single-sample segments get a small dot
+            instead of a line (nothing to connect it to). */}
+        {segments.map((seg, si) => {
+          if (seg.length === 1) {
+            const p = xy[seg[0]];
+            return <circle key={si} cx={p.x} cy={p.y} r="2" fill={color} opacity="0.7" />;
+          }
+          const segPoints = seg.map((i) => `${xy[i].x},${xy[i].y}`).join(" ");
+          const segArea = `${xy[seg[0]].x},${baseline} ${segPoints} ${xy[seg[seg.length - 1]].x},${baseline}`;
+          return (
+            <g key={si}>
+              <polygon points={segArea} fill={`url(#area-${gradId})`} />
+              <polyline
+                points={segPoints}
+                fill="none"
+                stroke={color}
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </g>
+          );
+        })}
 
-        <polyline
-          points={points}
-          fill="none"
-          stroke={color}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+        {/* Gaps: a dashed line pinned to 0 instead of interpolating across
+            missing data. */}
+        {gapAfter.map((g, i) => {
+          if (!g) return null;
+          return (
+            <line
+              key={`gap-${i}`}
+              x1={xy[i].x}
+              x2={xy[i + 1].x}
+              y1={zeroY}
+              y2={zeroY}
+              stroke="var(--color-faint)"
+              strokeWidth="1.5"
+              strokeDasharray="4 3"
+              opacity="0.7"
+            />
+          );
+        })}
 
         {/* Latest sample */}
         <circle cx={last.x} cy={last.y} r="2.5" fill={color} stroke="var(--color-surface)" strokeWidth="1.5" />
