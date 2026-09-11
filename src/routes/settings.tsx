@@ -27,6 +27,12 @@ import {
   WATTS_MAX_MAX,
 } from "@/lib/settings/gaugeSettings";
 import {
+  useTreatmentMinutes,
+  setTreatmentMinutes,
+  TREATMENT_MINUTES_MIN,
+  TREATMENT_MINUTES_MAX,
+} from "@/lib/settings/waterTreatmentSettings";
+import {
   theoreticalMaxChargeC,
   TARGET_CURRENT_MIN_MA,
   TARGET_CURRENT_MAX_MA,
@@ -87,6 +93,7 @@ function SettingsScreen() {
   const tankModel = useTankModel();
   const chlorinationLevels = useChlorinationLevels();
   const gaugeRanges = useGaugeRanges();
+  const treatmentMinutes = useTreatmentMinutes();
   const [tankModelOpen, setTankModelOpen] = useState(false);
   const [tankVolumeOpen, setTankVolumeOpen] = useState(false);
   const [waterSourceOpen, setWaterSourceOpen] = useState(false);
@@ -274,6 +281,24 @@ function SettingsScreen() {
           max={WATTS_MAX_MAX}
           unit="W"
           onCommit={(v) => setGaugeRanges({ ...gaugeRanges, wattsMax: v })}
+        />
+      </section>
+
+      {/* Water status timer */}
+      <section className="surface-lift space-y-3 rounded-card border border-border-soft bg-surface p-4">
+        <p className="type-cap text-faint">Water status timer</p>
+        <p className="text-xs leading-relaxed text-muted">
+          The device has no sensor for water safety, so the Home screen's "Water status" treats
+          this many minutes of continuous treatment as long enough to be safe. Turning treatment
+          off resets the wait — it only counts an unbroken run.
+        </p>
+        <RangeField
+          label="Wait time"
+          value={treatmentMinutes}
+          min={TREATMENT_MINUTES_MIN}
+          max={TREATMENT_MINUTES_MAX}
+          unit="min"
+          onCommit={(v) => setTreatmentMinutes(v)}
         />
       </section>
 

@@ -15,10 +15,12 @@ import { requestTankReading } from "@/lib/device/tank";
 import { setDosingMode, type DosingMode } from "@/lib/device/dosing";
 import { formatRelativeAgo } from "@/lib/device/history";
 import { useGaugeRanges } from "@/lib/settings/gaugeSettings";
+import { useTreatmentMinutes } from "@/lib/settings/waterTreatmentSettings";
+import { useTreatmentStatus } from "@/lib/device/waterTreatmentTimer";
 import { playModeChangeFeedback, playConfirmFeedback, playAbortFeedback } from "@/lib/ui/feedback";
 import { BUILD_TAG } from "@/lib/buildInfo";
 import { Header } from "@/components/layout/Header";
-import { StatusRow } from "@/components/device/StatusRow";
+import { WaterStatusPanel } from "@/components/device/WaterStatusPanel";
 import { TankGraphic } from "@/components/device/TankGraphic";
 import { DeviceCard } from "@/components/device/DeviceCard";
 import { ElectrolysisStatusPanel } from "@/components/device/ElectrolysisStatusPanel";
@@ -93,9 +95,40 @@ function HomeScreen() {
   // they're phone-local settings rather than constants (see gaugeSettings).
   const gaugeRanges = useGaugeRanges();
 
+  // Placeholder "is the water safe" heuristic: a plain timer since
+  // treatment last started (see waterTreatmentTimer.ts for why this and
+  // not a real measurement). `active` mirrors the same flag the
+  // electrolysis status panel and badge use below, so all three can never
+  // disagree about whether treatment is currently running.
+  const treatmentMinutes = useTreatmentMinutes();
+  const treatmentStatus = useTreatmentStatus(
+    device?.id,
+    Boolean(device?.online),
+    electrolysisOn && Boolean(device?.online),
+    treatmentMinutes,
+  );
+
   // Only a genuine fault is closable, and only until it changes.
-  const isError = waterStatus.status === "error";
-  const showStatusRow = !isError || dismissedError !== waterStatus.message;
+  const isFault = waterStatus.status === "error";
+  const faultDismissed = isFault && dismissedError === waterStatus.message;
+
+  // A real device fault always wins over the timer heuristic — it's an
+  // actual signal, the timer is only a placeholder for when there isn't
+  // one. Otherwise, big and simple: red/yellow/green off the timer, or a
+  // neutral "connect the device" state when there's nothing to report.
+  const waterPanel = !device?.online
+    ? { tone: "info" as const, headline: "Unknown", message: "Connect the device to see water status." }
+    : isFault && !faultDismissed
+      ? { tone: "bad" as const, headline: "Needs attention", message: waterStatus.message }
+      : treatmentStatus.status === "green"
+        ? { tone: "good" as const, headline: "Safe to use", message: "Water is safe to use." }
+        : treatmentStatus.status === "yellow"
+          ? {
+              tone: "warn" as const,
+              headline: "Being treated",
+              message: `Water is being treated — wait about ${treatmentStatus.remainingMinutes} more minute${treatmentStatus.remainingMinutes === 1 ? "" : "s"}.`,
+            }
+          : { tone: "bad" as const, headline: "Not treated", message: "Water is not treated — turn on treatment." };
 
   // One place deciding what the electrolysis badge says, so the wording and
   // the cell animation can never disagree about whether it's running.
@@ -189,15 +222,13 @@ function HomeScreen() {
         }
       />
 
-{showStatusRow ? (
-        <StatusRow
-          tone={waterStatus.tone}
-          label={waterStatus.label}
-          message={waterStatus.message}
-          onInfo={() => setInfoOpen(true)}
-          onDismiss={isError ? () => setDismissedError(waterStatus.message) : undefined}
-        />
-      ) : null}
+      <WaterStatusPanel
+        tone={waterPanel.tone}
+        headline={waterPanel.headline}
+        message={waterPanel.message}
+        onInfo={() => setInfoOpen(true)}
+        onDismiss={isFault && !faultDismissed ? () => setDismissedError(waterStatus.message) : undefined}
+      />
 
       {/* WATER CONTROL — the primary panel. Everything that is true *right
           now* lives here: the control that drives the process, the two live
@@ -389,9 +420,18 @@ function HomeScreen() {
         ) : null}
       </div>
 
-      <InfoSheet open={infoOpen} onClose={() => setInfoOpen(false)} title={waterStatus.label}>
-        <p className="text-muted">{waterStatus.message}</p>
+      <InfoSheet open={infoOpen} onClose={() => setInfoOpen(false)} title={waterPanel.headline}>
+        <p className="text-muted">{waterPanel.message}</p>
         {status.detail ? <p className="mt-2 text-muted">{status.detail}</p> : null}
+        {/* The disclaimer this heuristic needs: the device has no sensor
+            that measures whether the water is actually safe, so outside of
+            a real fault, this is a plain timer since treatment last
+            started, not a verified reading. */}
+        <p className="mt-3 text-xs leading-relaxed text-faint">
+          The device has no water-safety sensor, so "safe to use" is based on how long treatment
+          has been running continuously, not a direct measurement. The wait time is adjustable in
+          Settings.
+        </p>
       </InfoSheet>
 
       <InfoSheet open={modeInfoOpen} onClose={() => setModeInfoOpen(false)} title="Chlorination mode">

@@ -88,6 +88,11 @@
      any single obvious repeating shape. */
   --animate-wave-front: wave-shift 5s linear infinite;
   --animate-wave-back: wave-shift 8s linear infinite reverse;
+  /* Small ambient splash droplets on the Home "water status" cup icon —
+     purely decorative branding, not a state signal, so it plays regardless
+     of status. Each droplet gets its own delay inline so they don't hop in
+     lockstep. */
+  --animate-splash: splash 2.2s ease-in-out infinite;
 
   @keyframes rise {
     from { opacity: 0; transform: translate3d(0, 6px, 0); }
@@ -136,6 +141,15 @@
   @keyframes wave-shift {
     from { transform: translateX(0); }
     to   { transform: translateX(-342px); }
+  }
+  /* Droplet rises off the water surface, arcs up, and fades back out — a
+     small bounce rather than a full trip so it reads as a splash, not a
+     bubble. */
+  @keyframes splash {
+    0%, 100% { opacity: 0; transform: translate3d(0, 0, 0) scale(0.5); }
+    35%      { opacity: 1; }
+    55%      { opacity: 1; transform: translate3d(0, -7px, 0) scale(1); }
+    85%      { opacity: 0; transform: translate3d(0, -10px, 0) scale(0.8); }
   }
 }
 

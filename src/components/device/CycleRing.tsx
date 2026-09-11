@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { CycleRingSummary } from "@/lib/device/cycleRing";
 
 /**
- * "Operation cycle" overview — two concentric progress rings, in the spirit
- * of the technical app's CycleRing (src/components/devices/CycleRing.tsx in
- * njord-aqua-main):
- *   outer = phase time elapsed / cycle duration
- *   inner = delivered charge / target charge, in Coulombs
+ * "Operation cycle" overview — two concentric progress indicators, in the
+ * spirit of the technical app's CycleRing (src/components/devices/CycleRing.tsx
+ * in njord-aqua-main):
+ *   outer = phase time elapsed / cycle duration — a stopwatch-style trace
+ *   inner = delivered charge / target charge, in Coulombs — a wide bar
  * Center shows the live electrode current and phase ("Treating"/"Resting"/
  * "Idle"). LiveStatus only notifies every ~2s (see BLE_API_SPEC.md); this
  * resyncs to the device's authoritative `elapsedMs` on every update but
@@ -18,6 +18,15 @@ import type { CycleRingSummary } from "@/lib/device/cycleRing";
  * forever, making the ring look frozen. Falls back to a host-side stopwatch
  * that starts counting the moment the cycle goes active, same as the
  * technical app's CycleRing fallback.
+ *
+ * Visual design: the outer ring reads as a stopwatch face — tick marks
+ * standing in for a plain background track — with a *trace* (not a solid
+ * bar) following the current position: translucent at the tail, solid at
+ * the head, so it reads as "where the hand has swept" rather than a filled
+ * gauge. The inner charge indicator is the opposite instinct — a wide,
+ * confident bar — with the same head-brightening gradient so both
+ * progress indicators share one visual language ("further along = brighter
+ * at the tip") without looking identical.
  */
 export function CycleRing({ summary }: { summary: CycleRingSummary }) {
   const { online, active, elapsedMs, totalMs, hasDeviceClock, deliveredC, targetC, elecMa, phaseLabel, deviceTime } = summary;
@@ -33,6 +42,9 @@ export function CycleRing({ summary }: { summary: CycleRingSummary }) {
   // completely frozen, exactly the reported bug.
   const fallbackStartRef = useRef<number | null>(active ? Date.now() : null);
   const [, setTick] = useState(0);
+  // Unique per mount, so two rings on screen at once (unlikely today, but
+  // cheap to guard against) never collide on the same gradient id.
+  const gradientUid = useId();
 
   // Resync to the device's latest sample whenever it changes.
   useEffect(() => {
@@ -71,44 +83,125 @@ export function CycleRing({ summary }: { summary: CycleRingSummary }) {
   const timePct = totalMs > 0 ? Math.min(100, (interpolatedMs / totalMs) * 100) : 0;
   const chargePct = targetC > 0 ? Math.min(100, (deliveredC / targetC) * 100) : 0;
 
-
   const size = 200;
   const c = size / 2;
-  const rOuter = 86;
-  const rInner = 64;
-  const circOuter = 2 * Math.PI * rOuter;
-  const circInner = 2 * Math.PI * rInner;
+  // Outer = the time trace: thin, so it reads as a line swept around the
+  // face rather than a filled ring.
+  const rOuter = 88;
+  const strokeOuter = 7;
+  // Inner = the charge bar: deliberately wide and confident, the opposite
+  // instinct from the trace above it.
+  const rInner = 60;
+  const strokeInner = 18;
+
+  const timeHead = pointOnCircle(c, c, rOuter, angleForPct(timePct));
+  const timeTail = pointOnCircle(c, c, rOuter, angleForPct(0));
+  const chargeHead = pointOnCircle(c, c, rInner, angleForPct(chargePct));
+  const chargeTail = pointOnCircle(c, c, rInner, angleForPct(0));
+
+  const timeGradId = `cyclering-time-${gradientUid}`;
+  const chargeGradId = `cyclering-charge-${gradientUid}`;
 
   return (
     <div className="surface-lift flex flex-col items-center gap-3 rounded-card border border-border-soft bg-surface p-4">
       <div className="relative">
         <svg viewBox={`0 0 ${size} ${size}`} className="h-auto w-full max-w-[220px]" role="img" aria-label="Operation cycle progress">
-          <circle cx={c} cy={c} r={rOuter} fill="none" stroke="var(--color-surface-muted)" strokeWidth={10} />
+          <defs>
+            {/* Vector runs from the 12-o'clock start point to the trace's
+                current head, so the gradient always brightens toward
+                "where the hand currently is" rather than a fixed compass
+                direction — the same effect whether the cycle is 10% or
+                90% through. */}
+            <linearGradient
+              id={timeGradId}
+              gradientUnits="userSpaceOnUse"
+              x1={timeTail.x}
+              y1={timeTail.y}
+              x2={timeHead.x}
+              y2={timeHead.y}
+            >
+              <stop offset="0%" stopColor="var(--color-info)" stopOpacity={0.12} />
+              <stop offset="100%" stopColor="var(--color-info)" stopOpacity={0.95} />
+            </linearGradient>
+            <linearGradient
+              id={chargeGradId}
+              gradientUnits="userSpaceOnUse"
+              x1={chargeTail.x}
+              y1={chargeTail.y}
+              x2={chargeHead.x}
+              y2={chargeHead.y}
+            >
+              {/* Base tone at the tail, a lighter tint at the head — a
+                  hardcoded tint rather than color-mix(), since SVG stop
+                  colours need to render consistently on the Android
+                  WebView regardless of its exact Chromium version. */}
+              <stop offset="0%" stopColor="var(--color-good)" />
+              <stop offset="100%" stopColor="#6fd9a0" />
+            </linearGradient>
+          </defs>
+
+          {/* Stopwatch face: tick marks stand in for a plain background
+              track. 60 ticks (one per "second" position), a longer/bolder
+              mark every 5th, same convention as an analogue stopwatch. */}
+          <g>
+            {STOPWATCH_TICKS.map((t, i) => {
+              const angle = (i / STOPWATCH_TICKS.length) * 360 - 90;
+              const major = i % 5 === 0;
+              const outer = rOuter + strokeOuter / 2 + (major ? 8 : 4);
+              const inner = rOuter + strokeOuter / 2 + 1;
+              const p1 = pointOnCircle(c, c, inner, angle);
+              const p2 = pointOnCircle(c, c, outer, angle);
+              return (
+                <line
+                  key={i}
+                  x1={p1.x}
+                  y1={p1.y}
+                  x2={p2.x}
+                  y2={p2.y}
+                  stroke="var(--color-border)"
+                  strokeWidth={major ? 2 : 1}
+                  strokeLinecap="round"
+                />
+              );
+            })}
+          </g>
+
+          {/* Time trace: translucent tail brightening to a solid head,
+              via the gradient above — "where the hand has swept", not a
+              filled gauge. */}
           <circle
             cx={c}
             cy={c}
             r={rOuter}
             fill="none"
-            stroke="var(--color-info)"
-            strokeWidth={10}
+            stroke={`url(#${timeGradId})`}
+            strokeWidth={strokeOuter}
             strokeLinecap="round"
-            strokeDasharray={circOuter}
-            strokeDashoffset={circOuter * (1 - timePct / 100)}
+            strokeDasharray={2 * Math.PI * rOuter}
+            strokeDashoffset={2 * Math.PI * rOuter * (1 - timePct / 100)}
             transform={`rotate(-90 ${c} ${c})`}
             style={{ transition: "stroke-dashoffset 0.4s ease-out" }}
           />
+          {/* Bright head marker — the trace fades in from the tail, so
+              without this the current position can be hard to pinpoint
+              at a glance, especially early in a cycle. */}
+          {active && timePct > 0 ? (
+            <circle cx={timeHead.x} cy={timeHead.y} r={strokeOuter * 0.55} fill="var(--color-info)" />
+          ) : null}
 
-          <circle cx={c} cy={c} r={rInner} fill="none" stroke="var(--color-surface-muted)" strokeWidth={10} />
+          {/* Charge bar: wide, solid, brightening toward its own head with
+              the same gradient technique. */}
+          <circle cx={c} cy={c} r={rInner} fill="none" stroke="var(--color-surface-muted)" strokeWidth={strokeInner} />
           <circle
             cx={c}
             cy={c}
             r={rInner}
             fill="none"
-            stroke="var(--color-good)"
-            strokeWidth={10}
+            stroke={`url(#${chargeGradId})`}
+            strokeWidth={strokeInner}
             strokeLinecap="round"
-            strokeDasharray={circInner}
-            strokeDashoffset={circInner * (1 - chargePct / 100)}
+            strokeDasharray={2 * Math.PI * rInner}
+            strokeDashoffset={2 * Math.PI * rInner * (1 - chargePct / 100)}
             transform={`rotate(-90 ${c} ${c})`}
             style={{ transition: "stroke-dashoffset 0.4s ease-out" }}
           />
@@ -168,6 +261,21 @@ export function CycleRing({ summary }: { summary: CycleRingSummary }) {
   );
 }
 
+// 60 positions, purely decorative face marks — independent of the actual
+// progress value.
+const STOPWATCH_TICKS = Array.from({ length: 60 });
+
+/** 0% sits at 12 o'clock (-90°) and grows clockwise, matching the existing
+ *  `rotate(-90)` convention used for the dasharray arcs below. */
+function angleForPct(pct: number): number {
+  return -90 + (pct / 100) * 360;
+}
+
+function pointOnCircle(cx: number, cy: number, r: number, angleDeg: number): { x: number; y: number } {
+  const rad = (angleDeg * Math.PI) / 180;
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+
 function formatDuration(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000));
   const h = Math.floor(s / 3600);
@@ -177,3 +285,4 @@ function formatDuration(ms: number): string {
   if (m > 0) return `${m}m${sec.toString().padStart(2, "0")}s`;
   return `${sec}s`;
 }
+
