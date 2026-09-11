@@ -25,6 +25,7 @@ import { ElectrolysisStatusPanel } from "@/components/device/ElectrolysisStatusP
 import { InfoSheet } from "@/components/ui/InfoSheet";
 import { Button } from "@/components/ui/Button";
 import { SpeedDial } from "@/components/ui/SpeedDial";
+import { Thermometer } from "@/components/ui/Thermometer";
 import { EmptyState } from "@/components/ui/Skeleton";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { cn } from "@/lib/utils";
@@ -237,12 +238,13 @@ function HomeScreen() {
           />
         </div>
 
-        {/* Two speed dials. Both are bounded magnitudes with a meaningful
-            full scale, which is exactly what a dial is for — the needle's
-            position says "low/normal/high" before the number is read. Their
-            ranges are installation-specific, so they're set in Settings. */}
+        {/* Temperature gets a thermometer and power gets a dial: both are
+            bounded magnitudes with a meaningful full scale, but temperature
+            has a physical instrument people read instantly, whereas power
+            only has the abstract low/normal/high of a needle. Their ranges
+            are installation-specific, so they're set in Settings. */}
         <div className="mt-4 flex items-start justify-center gap-6 px-4">
-          <SpeedDial
+          <Thermometer
             value={health?.temperature.available ? health.temperature.celsius : null}
             max={gaugeRanges.tempMaxC}
             unit="°C"
