@@ -1,6 +1,8 @@
 import { createRootRoute, Outlet, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { BottomTabBar } from "@/components/layout/BottomTabBar";
+import { OtaDialog } from "@/components/ota/OtaDialog";
+import { FirmwareVersionDialog } from "@/components/ota/FirmwareVersionDialog";
 import { cn } from "@/lib/utils";
 
 export const Route = createRootRoute({
@@ -32,6 +34,8 @@ function RootLayout() {
         <Outlet />
       </main>
       <BottomTabBar />
+      <OtaDialog />
+      <FirmwareVersionDialog />
       {splashVisible ? <SplashScreen onDone={() => setSplashVisible(false)} /> : null}
     </div>
   );

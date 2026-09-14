@@ -1,0 +1,26 @@
+{
+  "_note": "Firmware release CATALOG for the Njord Aqua app. Lists every firmware image that remains available for install, newest first. The app lets the user pick any listed release to flash over BLE — including OLDER versions, so a device can be rolled back to a known-good firmware if a new build misbehaves. Each release `url` is RELATIVE to this file, so the same catalog works whether it is served from the app bundle (/firmware/) or a remote host (e.g. a Supabase Storage public bucket) — point VITE_FIRMWARE_CATALOG_URL at the hosted index.json to ship new firmware WITHOUT rebuilding the app. To publish a release: build the padded AquaNord.bin, upload it to <version>/AquaNord.bin next to this file, add an entry below with size + crc32, and set `latest` to the recommended version. Keep old entries + their .bin files so downgrade stays possible. `latest` should match latest.json's `version`.",
+  "latest": "2.13",
+  "releases": [
+    {
+      "version": "2.13",
+      "min_hw": "0.93",
+      "min_api": "2.0",
+      "url": "2.13/AquaNord.bin",
+      "size": 101855,
+      "crc32": "0x0ad8cab2",
+      "released": "2026-09-13",
+      "notes": "DeviceInfo reports api 2.13. Current recommended firmware."
+    },
+    {
+      "version": "2.12",
+      "min_hw": "0.93",
+      "min_api": "2.0",
+      "url": "2.12/AquaNord.bin",
+      "size": 101855,
+      "crc32": "0xf4900aa4",
+      "released": "2026-09-06",
+      "notes": "Previous stable firmware. Kept available as a rollback target."
+    }
+  ]
+}

@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bluetooth, BluetoothOff, Check } from "lucide-react";
 import { useDevices, useConfig, updateConfig } from "@/lib/device/store";
+import type { Device } from "@/lib/device/types";
 import { pairDevice, forgetDevice, reconnectDevice } from "@/lib/device/actions";
 import {
   waterSourceFromConfig,
@@ -45,7 +46,10 @@ import { PickerSheet } from "@/components/ui/PickerSheet";
 import { InfoSheet } from "@/components/ui/InfoSheet";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { FirmwareUpdatePanel } from "@/components/settings/FirmwareUpdatePanel";
+import { ArrowUpRight, DownloadCloud } from "lucide-react";
+import { useFirmwareManifest, checkFirmwareUpdate } from "@/lib/ota/updateCheck";
+import { openFirmwarePicker } from "@/lib/ota/firmwarePicker";
+import { useOtaDeviceStatus } from "@/lib/ota/otaController";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/settings")({
@@ -303,7 +307,7 @@ function SettingsScreen() {
         />
       </section>
 
-      <FirmwareUpdatePanel device={device} />
+      <FirmwareSection device={device} />
 
       {/* Alert information */}
       <Button variant="secondary" onClick={() => setAlertInfoOpen(true)}>
@@ -587,5 +591,67 @@ function TargetCurrentField({
         <span className="type-label text-faint">mA (max {TARGET_CURRENT_MAX_MA / 1000}A)</span>
       </div>
     </div>
+  );
+}
+
+/**
+ * Firmware section: shows the device's current API version and opens the
+ * firmware version picker (ported from the njord-aqua-main reference app),
+ * which lists every published release — including older ones for rollback —
+ * and streams the chosen image over the ST BLE_Ota loader. See
+ * docs/ota_app_integration_patch.md for the wire protocol.
+ */
+function FirmwareSection({ device }: { device: Device | undefined }) {
+  const manifest = useFirmwareManifest();
+  const upd = device && manifest ? checkFirmwareUpdate(device.info, manifest) : null;
+  const outdated = !!upd?.updateAvailable;
+  const otaStatus = useOtaDeviceStatus(device?.id ?? "");
+  const otaActive = otaStatus !== "idle";
+
+  return (
+    <section className="surface-lift space-y-3 rounded-card border border-border-soft bg-surface p-4">
+      <p className="type-cap text-faint">Firmware</p>
+      <p className="text-xs leading-relaxed text-muted">
+        Update the device's firmware over Bluetooth, or roll back to a previous version if a new
+        build misbehaves. Keep the app open and stay near the device during the transfer.
+      </p>
+
+      {device ? (
+        <button
+          type="button"
+          disabled={otaActive}
+          onClick={() =>
+            openFirmwarePicker({
+              id: device.id,
+              name: device.name,
+              api: device.info.api,
+              hw: device.info.hw,
+              online: device.online,
+            })
+          }
+          className={cn(
+            "press flex w-full items-center justify-between gap-3 rounded-inner border p-3 text-left disabled:opacity-40",
+            outdated ? "border-warn/40 bg-warn/5" : "border-border-soft bg-surface-muted",
+          )}
+        >
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-content">
+              Firmware v{device.info.api}
+              {!device.online && " · offline"}
+            </p>
+            <p className="type-label text-faint">
+              {outdated ? `Update ${upd?.latest} available` : "Tap to choose a version"}
+            </p>
+          </div>
+          {outdated ? (
+            <ArrowUpRight size={18} className="shrink-0 text-warn" />
+          ) : (
+            <DownloadCloud size={18} className="shrink-0 text-faint" />
+          )}
+        </button>
+      ) : (
+        <p className="type-label text-faint">Connect to the device to manage firmware.</p>
+      )}
+    </section>
   );
 }

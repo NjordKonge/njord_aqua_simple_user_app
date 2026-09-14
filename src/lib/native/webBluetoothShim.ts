@@ -27,6 +27,7 @@ import {
   ConnectionPriority,
   numbersToDataView,
   type RequestBleDeviceOptions,
+  type ScanResult,
 } from "@capacitor-community/bluetooth-le";
 
 // localStorage key the store already uses to persist paired devices. We read it
@@ -322,3 +323,104 @@ export function installWebBluetoothShim(): void {
 
 // Re-export so callers can build command payloads consistently if needed.
 export { numbersToDataView };
+
+// ---- OTA loader discovery (native only) -------------------------------------
+/** Whether a native scan-based reconnect is available (Capacitor Android). */
+export function canScanForOtaLoader(): boolean {
+  return Capacitor.isNativePlatform();
+}
+
+/** Human-readable summary of the most recent OTA loader scan, for surfacing in
+ *  the update modal when a reconnect fails ("what did the phone actually see?"). */
+let lastScanReport = "";
+export function getLastOtaScanReport(): string {
+  return lastScanReport;
+}
+
+/**
+ * Scan for the ST BLE_Ota loader after a device reboots into OTA mode.
+ *
+ * The loader may re-advertise under a DIFFERENT BLE address than the running
+ * app, so reconnecting to the original MAC can fail. We scan and accept the
+ * first device that advertises the OTA service UUID, matches the original
+ * address, or has a loader-like name. Returns a device handle usable for GATT,
+ * or null on web / timeout. A diagnostic summary of everything seen is stored
+ * in {@link getLastOtaScanReport}.
+ */
+export async function scanForOtaLoader(
+  originalId: string,
+  serviceUuid: string,
+  timeoutMs = 20_000,
+): Promise<BluetoothDevice | null> {
+  if (!Capacitor.isNativePlatform()) return null;
+  try {
+    await ensureInit();
+  } catch (e) {
+    lastScanReport = `scan init failed: ${e instanceof Error ? e.message : String(e)}`;
+    return null;
+  }
+  const svc = serviceUuid.toLowerCase();
+  const orig = originalId.toLowerCase();
+  // The ST BLE_Ota reference loader advertises as "STM_OTA". Match that (and any
+  // "…ota…" name variant) but NOT a generic "njord" name: a healthy, unrelated
+  // Njord *application* device advertising nearby would otherwise be grabbed by
+  // mistake, so the connect / getPrimaryService(fe20) fails and the OTA locks
+  // onto the wrong unit. The real loader is reached via its fe20 service, its
+  // (ST) address, or the "stm"/"ota" name below.
+  const looksLikeLoader = (name?: string) => {
+    const n = (name ?? "").toLowerCase();
+    return n.includes("ota") || n.startsWith("stm");
+  };
+
+  const seen = new Map<string, { name?: string; uuids: string[] }>();
+
+  const found = await new Promise<{ id: string; name?: string } | null>((resolve) => {
+    let done = false;
+    const finish = (r: { id: string; name?: string } | null) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      BleClient.stopLEScan().catch(() => {});
+      resolve(r);
+    };
+    const timer = setTimeout(() => finish(null), timeoutMs);
+    // Unfiltered scan: some loaders advertise only the name, not the 128-bit
+    // service UUID, so we match on the advertised service, the MAC, or a name.
+    BleClient.requestLEScan({ allowDuplicates: true }, (res: ScanResult) => {
+      const advUuids = (res.uuids ?? []).map((u) => u.toLowerCase());
+      const id = res.device.deviceId;
+      const name = res.device.name ?? res.localName;
+      seen.set(id.toLowerCase(), { name, uuids: advUuids });
+      if (advUuids.includes(svc) || id.toLowerCase() === orig || looksLikeLoader(name)) {
+        finish({ id, name });
+      }
+    }).catch((e) => {
+      lastScanReport = `scan start failed: ${e instanceof Error ? e.message : String(e)}`;
+      finish(null);
+    });
+  });
+
+  // Build a compact report of what we saw regardless of outcome.
+  if (seen.size === 0) {
+    if (!lastScanReport.startsWith("scan ")) {
+      lastScanReport = "scan saw 0 advertising devices (BLE off, location off, or loader not advertising)";
+    }
+  } else {
+    const list = [...seen.entries()]
+      .slice(0, 6)
+      .map(([id, d]) => {
+        const shortId = id.length > 8 ? `${id.slice(0, 8)}…` : id;
+        const fe20 = d.uuids.includes(svc) ? " +fe20" : "";
+        return `${d.name ?? "(no name)"}[${shortId}]${fe20}`;
+      })
+      .join(", ");
+    lastScanReport = `scan saw ${seen.size}: ${list}`;
+  }
+
+  if (!found) return null;
+  // Give Android a moment to fully tear down the LE scan before the caller
+  // opens a GATT connection: connecting while a scan is still stopping is a
+  // common source of transient status-133 connect failures.
+  await new Promise((r) => setTimeout(r, 300));
+  return getOrCreateDevice(found.id, found.name) as unknown as BluetoothDevice;
+}

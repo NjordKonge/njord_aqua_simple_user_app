@@ -21,6 +21,7 @@ import type {
   TelemetryLogEntry,
   TelemetrySample,
 } from "./types";
+import { scanForOtaLoader, canScanForOtaLoader, getLastOtaScanReport } from "../native/webBluetoothShim";
 
 // ---- UUIDs (Web Bluetooth wants lowercase, full 128-bit) -------------------
 const SERVICE_UUID = "4e4a5244-4fe1-11ee-a2b0-0deadbeef001";
@@ -34,6 +35,29 @@ const CHAR = {
   LOG_DATA:    "4e4a5244-4fe1-11ee-a2b0-0deadbeef008",
   SONAR_DBG:   "4e4a5244-4fe1-11ee-a2b0-0deadbeef009",
 } as const;
+
+// ---- ST BLE_Ota loader GATT (present only while the device is in OTA mode) --
+// The running firmware reboots into this loader on the `ota_reboot` command;
+// the loader advertises the fe20 service on the SAME BLE address, so we can
+// reconnect to the existing device handle (no second picker) and stream the
+// new application image. See docs/ota_app_integration_patch.md.
+const OTA = {
+  SERVICE:  "0000fe20-cc7a-482a-984a-7f2ed5b3e58f",
+  BASE_ADDR:"0000fe22-8e22-4541-9d4c-21edae82ed19", // write [cmd, a16, a8, a0]
+  CONFIRM:  "0000fe23-8e22-4541-9d4c-21edae82ed19", // indicate (0x01 = rebooting)
+  RAW_DATA: "0000fe24-8e22-4541-9d4c-21edae82ed19", // write-no-response image stream
+} as const;
+/** Njord app flash origin — the loader programs the image here. */
+const OTA_APP_ADDR = 0x08007000;
+
+/** Phases reported by {@link Store.runOtaUpdate} for UI progress display. */
+export type OtaPhase =
+  | "reboot"     // asking the app to reboot into the loader
+  | "reconnect"  // linking to the OTA loader
+  | "start"      // loader erasing the target region
+  | "transfer"   // streaming the image
+  | "finish"     // finalizing / validating
+  | "done";      // image accepted, device rebooting into new firmware
 
 // ---- Fault severity mapping -------------------------------------------------
 /** Thermistor sentinel: device reports this when the probe is open/shorted.
@@ -801,6 +825,11 @@ interface DeviceRuntime {
    *  by a LiveStatus frame. Reset to 0 in applyStatus(). Caps how many times
    *  the liveness watchdog will physically cycle the link before giving up. */
   staleReconnects: number;
+  /** True once the device has been rebooted into the ST BLE_Ota loader for an
+   *  update and has NOT yet returned to the application. Lets a failed/retried
+   *  OTA resume straight to the loader instead of trying to reboot an offline
+   *  (loader-mode) device. Cleared on successful update or normal reconnect. */
+  otaInLoader?: boolean;
 }
 
 export interface SonarSample {
@@ -1434,6 +1463,304 @@ class Store {
     if (rt.server?.connected) rt.server.disconnect();
   }
 
+  // ---- OTA (ST BLE_Ota) -----------------------------------------------------
+  /** Stream a firmware image to a connected device over the ST BLE_Ota loader.
+   *  Reboots the app into the loader, reconnects on the same BLE address,
+   *  uploads the image to 0x08007000, and waits for the reboot-confirmed
+   *  indication. Reports progress via `on`. Throws on failure / abort. */
+  async runOtaUpdate(
+    deviceId: string,
+    firmware: Uint8Array,
+    on: {
+      phase: (phase: OtaPhase, detail?: string) => void;
+      progress: (sentBytes: number, totalBytes: number) => void;
+    },
+    signal?: AbortSignal,
+    opts?: { forceResume?: boolean },
+  ): Promise<void> {
+    const rt = this.rt.get(deviceId);
+    const dev = this.devices.find((d) => d.id === deviceId);
+    if (!rt || !dev) throw new Error("device not found");
+
+    // Two entry paths: a normal start (device online in the app) or a *resume*
+    // (a previous attempt already rebooted the device into the loader, so it is
+    // "offline" from the app's point of view but sitting in OTA mode). A resume
+    // can be forced explicitly (recovery button) since the in-memory flag does
+    // not survive an app restart.
+    const resume = rt.otaInLoader === true || opts?.forceResume === true;
+    if (!resume && (!rt.cmdChar || !dev.online)) {
+      throw new Error("device not connected");
+    }
+
+    const throwIfAborted = () => { if (signal?.aborted) throw new Error("update cancelled"); };
+
+    // Loader programs 8-byte doublewords → pad the image to a multiple of 8.
+    let image = firmware;
+    if (image.length % 8 !== 0) {
+      const padded = new Uint8Array(image.length + (8 - (image.length % 8)));
+      padded.set(image);
+      padded.fill(0xff, image.length);
+      image = padded;
+    }
+
+    // Suspend the store's auto-reconnect so it doesn't fight the loader link.
+    rt.autoReconnect = false;
+    if (rt.reconnectTimer) { clearTimeout(rt.reconnectTimer); rt.reconnectTimer = undefined; }
+
+    let succeeded = false;
+    try {
+      if (!resume) {
+        // 1. Ask the running firmware to reboot into the OTA loader.
+        on.phase("reboot", "sending ota_reboot");
+        this.sendCommand(deviceId, "ota_reboot");
+
+        // 2. Wait for the current link to drop (device resets shortly after).
+        await this.waitForDisconnect(rt.btDevice, 15_000);
+        dev.online = false;
+        this.notify();
+      }
+      // From here on we consider the device to be in (or heading into) the loader.
+      rt.otaInLoader = true;
+      throwIfAborted();
+
+      // A "terminal" failure that should NOT trigger a full re-upload retry:
+      // used when the whole image was sent but the loader never confirmed the
+      // reboot (the image is already written, so a power cycle boots it).
+      class TerminalOtaError extends Error {}
+
+      // Steps 3–8 run inside a retry loop: the BLE link to the loader can drop
+      // mid-transfer (flash programming stalls the radio, weak signal, a full
+      // write queue…). Each attempt re-scans/reconnects the loader and restarts
+      // the upload from the base address (the loader re-erases the region), so a
+      // dropped link self-heals instead of forcing a power cycle + manual retry.
+      const MAX_ATTEMPTS = 3;
+      let attemptErr: unknown;
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS && !succeeded; attempt++) {
+        try {
+          // 3. Find + connect to the loader. It can re-advertise under a
+          //    different BLE address, so on native we SCAN for the fe20 service
+          //    rather than assume the original MAC, then verify with a real op.
+          on.phase(
+            "reconnect",
+            attempt === 1
+              ? "connecting to loader"
+              : `reconnecting to loader (try ${attempt}/${MAX_ATTEMPTS})`,
+          );
+          const { device: loaderDev, confCh, baseCh, rawCh } =
+            await this.connectOtaLoader(rt, 45_000, signal);
+          throwIfAborted();
+
+          // 4a. Subscribe to the reboot-confirmed indication (verified live).
+          const rebootConfirmed = new Promise<void>((resolve) => {
+            const onInd = (ev: Event) => {
+              const v = (ev.target as BluetoothRemoteGATTCharacteristic).value;
+              if (v && v.byteLength >= 1 && v.getUint8(0) === 0x01) {
+                confCh.removeEventListener("characteristicvaluechanged", onInd);
+                resolve();
+              }
+            };
+            confCh.addEventListener("characteristicvaluechanged", onInd);
+          });
+
+          // 4b. Watch for the link dropping. During the *finish* step a drop
+          //     means the device rebooted into the new app (success); during
+          //     the *transfer* it means the upload was interrupted (→ retry).
+          let didDisconnect = false;
+          const disconnected = new Promise<void>((resolve) => {
+            loaderDev.addEventListener("gattserverdisconnected", () => {
+              didDisconnect = true;
+              resolve();
+            });
+          });
+
+          // 5. Start application upload at 0x08007000 (loader erases the region).
+          //    fe22 is declared CHAR_PROP_WRITE_WITHOUT_RESP in the ST loader
+          //    (otas_stm.c), so it must be written without a response — a GATT
+          //    Write Request is rejected ("writing characteristic failed").
+          on.phase("start", "erasing target");
+          await baseCh.writeValueWithoutResponse(new Uint8Array([
+            0x02,
+            (OTA_APP_ADDR >> 16) & 0xff,
+            (OTA_APP_ADDR >> 8) & 0xff,
+            OTA_APP_ADDR & 0xff,
+          ]));
+
+          // 6. Stream the image (write-without-response, 240-byte chunks).
+          on.phase("transfer");
+          on.progress(0, image.length);
+          const CHUNK = 240;
+          let sinceYield = 0;
+          for (let off = 0; off < image.length; off += CHUNK) {
+            throwIfAborted();
+            if (didDisconnect) throw new Error("link lost during transfer");
+            const end = Math.min(off + CHUNK, image.length);
+            await rawCh.writeValueWithoutResponse(image.slice(off, end));
+            on.progress(end, image.length);
+            // Yield periodically so the UI repaints and the loader has time to
+            // program flash + service the radio between bursts (a tight loop
+            // both freezes the app and can overrun the loader mid-transfer).
+            if (++sinceYield >= 6) {
+              sinceYield = 0;
+              await new Promise((r) => setTimeout(r, 6));
+            }
+          }
+
+          // 7. Signal upload finished. The loader validates + reboots, so the
+          //    reboot-confirmed indication is frequently lost (the device
+          //    resets mid-indication) and the 0x07 write itself — being
+          //    write-without-response — can be dropped. Re-send it a few times
+          //    and accept a link drop as proof the device rebooted.
+          on.phase("finish", "finalizing");
+          let confirmed = false;
+          for (let f = 0; f < 4 && !confirmed; f++) {
+            if (didDisconnect) { confirmed = true; break; }
+            try {
+              await baseCh.writeValueWithoutResponse(new Uint8Array([0x07, 0x00, 0x00, 0x00]));
+            } catch (e) {
+              // A write error here almost always means the link just dropped —
+              // i.e. the device accepted 0x07 and is rebooting: treat as done.
+              if (didDisconnect) { confirmed = true; break; }
+              throw e;
+            }
+            const res = await Promise.race([
+              rebootConfirmed.then(() => "ok" as const),
+              disconnected.then(() => "ok" as const),
+              new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 4_000)),
+            ]);
+            if (res === "ok") confirmed = true;
+          }
+          if (!confirmed) {
+            // The image was fully sent but the loader never confirmed the
+            // reboot. Don't re-upload (that would needlessly re-erase a
+            // device that is already programmed) — tell the user to power
+            // cycle, which makes the loader validate + boot the new app.
+            throw new TerminalOtaError(
+              "device did not confirm reboot — the new firmware was fully sent, so power-cycle the device to boot it",
+            );
+          }
+
+          succeeded = true;
+        } catch (e) {
+          if (signal?.aborted) throw e;                 // user cancelled — stop
+          if (e instanceof TerminalOtaError) throw e;   // image sent — no retry
+          attemptErr = e;
+          if (attempt < MAX_ATTEMPTS) {
+            on.phase(
+              "reconnect",
+              `link lost — retrying (${attempt + 1}/${MAX_ATTEMPTS})`,
+            );
+            await new Promise((r) => setTimeout(r, 1_500));
+          }
+        }
+      }
+      if (!succeeded) {
+        throw attemptErr instanceof Error
+          ? attemptErr
+          : new Error(String(attemptErr ?? "firmware update failed"));
+      }
+
+      rt.otaInLoader = false;
+      on.phase("done");
+    } finally {
+      if (succeeded) {
+        // Device reboots into the new app — re-enable normal auto-reconnect.
+        rt.autoReconnect = true;
+        this.scheduleReconnect(deviceId);
+      }
+      // On failure we deliberately leave autoReconnect OFF and otaInLoader ON:
+      // the device is still in the loader (it has no app to reconnect to), so
+      // hammering the Njord service would just spam. The user can hit Retry,
+      // which resumes straight back into the loader.
+    }
+  }
+
+  /** Resolve once the device's GATT link is down (event or poll fallback). */
+  private waitForDisconnect(btDevice: BluetoothDevice, timeoutMs: number): Promise<void> {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        clearInterval(poll);
+        btDevice.removeEventListener("gattserverdisconnected", finish);
+        resolve();
+      };
+      btDevice.addEventListener("gattserverdisconnected", finish);
+      const t0 = Date.now();
+      const poll = setInterval(() => {
+        if (!btDevice.gatt?.connected || Date.now() - t0 > timeoutMs) finish();
+      }, 300);
+    });
+  }
+
+  /** Connect to the ST BLE_Ota loader and return its live characteristics.
+   *  Retries (scanning on native) until a REAL fe23 subscription succeeds, so
+   *  we never proceed against a phantom (lazily-created) connection. */
+  private async connectOtaLoader(
+    rt: DeviceRuntime,
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ): Promise<{
+    device: BluetoothDevice;
+    confCh: BluetoothRemoteGATTCharacteristic;
+    baseCh: BluetoothRemoteGATTCharacteristic;
+    rawCh: BluetoothRemoteGATTCharacteristic;
+  }> {
+    const t0 = Date.now();
+    let lastErr: unknown;
+    const originalId = rt.btDevice.id;
+    let everFound = false;
+
+    while (Date.now() - t0 < timeoutMs) {
+      if (signal?.aborted) throw new Error("update cancelled");
+
+      // Pick a target device: prefer a fresh scan hit for the loader (native),
+      // fall back to the original handle (web, or if the scan finds nothing).
+      let target: BluetoothDevice = rt.btDevice;
+      let scanned = false;
+      if (canScanForOtaLoader()) {
+        const remaining = Math.max(4_000, Math.min(15_000, timeoutMs - (Date.now() - t0)));
+        try {
+          const found = await scanForOtaLoader(originalId, OTA.SERVICE, remaining);
+          if (found) { target = found; scanned = true; everFound = true; }
+        } catch (e) {
+          lastErr = e;
+        }
+        // On native, if the scan found nothing there is nothing to connect to —
+        // retrying a stale handle just wastes the window. Loop and re-scan.
+        if (!scanned) {
+          lastErr = new Error(getLastOtaScanReport() || "loader not found in scan");
+          continue;
+        }
+      }
+
+      try {
+        // Make sure any stale link is gone before reconnecting.
+        try { target.gatt?.disconnect(); } catch { /* ignore */ }
+        const server = await target.gatt!.connect();
+        const svc = await server.getPrimaryService(OTA.SERVICE);
+        const confCh = await svc.getCharacteristic(OTA.CONFIRM);
+        const baseCh = await svc.getCharacteristic(OTA.BASE_ADDR);
+        const rawCh  = await svc.getCharacteristic(OTA.RAW_DATA);
+        // REAL verification: subscribing to fe23 actually hits the device, so a
+        // missing service / dead link throws here instead of silently passing.
+        await confCh.startNotifications();
+        return { device: target, confCh, baseCh, rawCh };
+      } catch (e) {
+        lastErr = e;
+        try { target.gatt?.disconnect(); } catch { /* ignore */ }
+        await new Promise((r) => setTimeout(r, 800));
+      }
+    }
+    const detail = lastErr instanceof Error ? lastErr.message : String(lastErr);
+    const report = canScanForOtaLoader() ? ` (${getLastOtaScanReport()})` : "";
+    throw new Error(
+      everFound
+        ? `found loader but connect failed: ${detail}`
+        : `could not reach OTA loader: ${detail}${report}`,
+    );
+  }
+
   forget(id: string) {
     const rt = this.rt.get(id);
     if (rt) {
@@ -1467,6 +1794,10 @@ class Store {
   private applyStatus(id: string, s: LiveStatus) {
     const dev = this.devices.find((d) => d.id === id);
     if (!dev) return;
+    // A live status frame proves the device is running the application, not the
+    // OTA loader — clear any stale "in loader" flag from a prior update attempt.
+    const rt = this.rt.get(id);
+    if (rt?.otaInLoader) rt.otaInLoader = false;
     dev.status = s;
     const now = Date.now();
     dev.lastUpdate = now;

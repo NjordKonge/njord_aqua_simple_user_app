@@ -1,0 +1,11 @@
+{
+  "_note": "Firmware OTA manifest for the Njord Aqua app. Bump `version` (semver) on every firmware release, upload the padded AquaNord.bin to `firmware/<version>/AquaNord.bin`, and set `size`/`crc32`. The app compares `version` against the device's reported API version (DeviceInfo `api`) and offers an OTA update when newer. Host this file + the .bin on the same origin, Supabase Storage, or Cloudflare R2 and point VITE_FIRMWARE_MANIFEST_URL at it.",
+  "version": "2.13",
+  "min_hw": "0.93",
+  "min_api": "2.0",
+  "url": "2.13/AquaNord.bin",
+  "size": 101855,
+  "crc32": "0x0ad8cab2",
+  "released": "2026-09-13",
+  "notes": "Firmware 2.13 — DeviceInfo now reports api 2.13 (NJORD_API_VERSION), delivered over the ST BLE_Ota loader to the relocated app @ 0x08007000."
+}
