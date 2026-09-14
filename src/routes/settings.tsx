@@ -18,6 +18,12 @@ import {
   PRECHLORINATION_STEP_MG_L,
 } from "@/lib/device/prechlorination";
 import { useTankModel, setTankModel, TANK_MODEL_LABEL, type TankModel } from "@/lib/settings/tankSettings";
+import {
+  useTankHeightMm,
+  setTankHeightMm,
+  TANK_HEIGHT_MM_MIN,
+  TANK_HEIGHT_MM_MAX,
+} from "@/lib/settings/tankHeightSettings";
 import { useChlorinationLevels, setChlorinationLevels } from "@/lib/settings/chlorinationSettings";
 import {
   useGaugeRanges,
@@ -96,6 +102,7 @@ function SettingsScreen() {
   const config = useConfig(device?.id);
 
   const tankModel = useTankModel();
+  const tankHeightMm = useTankHeightMm();
   const chlorinationLevels = useChlorinationLevels();
   const gaugeRanges = useGaugeRanges();
   const treatmentMinutes = useTreatmentMinutes();
@@ -160,6 +167,20 @@ function SettingsScreen() {
             value={config ? `${config.tank_l}L` : "—"}
             onClick={() => setTankVolumeOpen(true)}
             disabled={!device?.online}
+          />
+        </div>
+        <div className="surface-lift mt-3 space-y-1 rounded-card border border-border-soft bg-surface p-4">
+          <p className="text-xs leading-relaxed text-muted">
+            Distance from the sonar sensor down to the tank bottom, i.e. the reading when the
+            tank is empty. Used to turn the raw sonar distance into a fill percentage.
+          </p>
+          <RangeField
+            label="Tank height"
+            value={tankHeightMm}
+            min={TANK_HEIGHT_MM_MIN}
+            max={TANK_HEIGHT_MM_MAX}
+            unit="mm"
+            onCommit={(v) => setTankHeightMm(v)}
           />
         </div>
       </section>

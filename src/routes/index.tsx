@@ -12,6 +12,7 @@ import type { CommandEntry } from "@/lib/device/types";
 import { useDeviceSummary } from "@/lib/device/useDeviceSummary";
 import { startTreatment, stopTreatment, clearFault, pairDevice } from "@/lib/device/actions";
 import { requestTankReading } from "@/lib/device/tank";
+import { logTankLevel, useTankUsage } from "@/lib/device/tankLog";
 import { setDosingMode, type DosingMode } from "@/lib/device/dosing";
 import { formatRelativeAgo } from "@/lib/device/history";
 import { useGaugeRanges } from "@/lib/settings/gaugeSettings";
@@ -39,8 +40,10 @@ export const Route = createFileRoute("/")({
 // Sonar readings are not pushed continuously by the firmware — request a
 // fresh one periodically while Home is open so the tank graphic stays
 // reasonably current (uses the existing, already-supported sonar_shot
-// command; see lib/device/tank.ts).
-const TANK_REFRESH_MS = 30_000;
+// command; see lib/device/tank.ts). Each tick also logs the resulting fill
+// level (lib/device/tankLog.ts), which is what the "Water used" figure is
+// derived from — so this cadence is also the log's sampling interval.
+const TANK_REFRESH_MS = 5_000;
 
 // Config (and therefore dosingMode, derived from config.elec_en/cycle_c) is
 // otherwise only re-read after a START/STOP/SETCFG this app itself sent (see
@@ -64,6 +67,14 @@ function HomeScreen() {
   } = summary;
   const [infoOpen, setInfoOpen] = useState(false);
   const [modeInfoOpen, setModeInfoOpen] = useState(false);
+
+  // Latest tank summary, read from the refresh timer's interval callback
+  // below (see logTankLevel) without re-creating that timer on every tick.
+  const tankRef = useRef(tank);
+  useEffect(() => {
+    tankRef.current = tank;
+  }, [tank]);
+  const tankUsage = useTankUsage(device?.id);
 
   // Optimistic mode display: SETCFG/START/STOP round-trip over BLE (ack,
   // then a separate config re-read) before `dosingMode` derived from the
@@ -150,7 +161,15 @@ function HomeScreen() {
   useEffect(() => {
     if (!device?.online) return;
     requestTankReading(device.id);
-    const id = setInterval(() => requestTankReading(device.id), TANK_REFRESH_MS);
+    const id = setInterval(() => {
+      requestTankReading(device.id);
+      // Log whatever level is currently known (the previous tick's reading
+      // — the fresh one just requested above arrives asynchronously over
+      // BLE). Close enough at this cadence, and simpler than plumbing the
+      // BLE response back into this effect.
+      const t = tankRef.current;
+      if (t.hasReading && t.liters != null) logTankLevel(device.id, t.liters);
+    }, TANK_REFRESH_MS);
     return () => clearInterval(id);
   }, [device?.id, device?.online]);
 
@@ -348,10 +367,11 @@ function HomeScreen() {
             label={`of ${tank.capacityLiters}L`}
             emphasis={tank.low ? "warn" : "normal"}
           />
-          {/* Water used — NOT AVAILABLE: the firmware has no flow sensor, so
-              there is no data source for litres consumed. Shown as an
-              explicit blank rather than a fabricated number. */}
-          <TankStat value={null} unit="L" label="Water used" emphasis="quiet" />
+          {/* Water used — the firmware has no flow sensor, so this is a
+              rough figure reconstructed from the logged tank level (sum of
+              drops over the last 24h; a rise is a refill, not usage — see
+              lib/device/tankLog.ts). Blank until enough samples exist. */}
+          <TankStat value={tankUsage.usedLiters} unit="L" label="Used (24h)" emphasis="quiet" />
         </div>
       </div>
 

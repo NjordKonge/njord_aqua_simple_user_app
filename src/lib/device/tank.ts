@@ -1,25 +1,32 @@
 /**
- * Tank level — derived from firmware config + on-demand sonar reading.
+ * Tank level — derived from a raw sonar distance reading + the phone-local
+ * "tank height" setting, NOT from the firmware's `tank_max_mm`/`fill_l_mm`
+ * config fields.
  *
  * Firmware fields (BLE_DEVELOPER_GUIDE.md §7, and the technical app's own
- * sonar debug tab, which labels fill_l_mm's unit as "L/mm"):
- *   tank_l       — tank capacity in litres
- *   tank_max_mm  — sonar distance (mm) reading that corresponds to an empty
- *                  tank (sensor mounted at the top, looking down)
- *   fill_l_mm    — litres represented by each mm of water column
+ * sonar debug tab):
+ *   tank_l — tank capacity in litres. Still a real, user-set config field
+ *            (Settings → Tank volume) and used here for the litres figure.
  *
- * litres = (tank_max_mm - dist_mm) * fill_l_mm, clamped to [0, tank_l].
+ * `tank_max_mm`/`fill_l_mm` (the sonar-distance-to-litres calibration) are
+ * NOT used any more — there's no app UI to set them and their values on
+ * real units don't reliably match the physical installation, which made the
+ * tank level read wrong. Instead:
  *
- * IMPORTANT: the sonar sensor is NOT polled continuously by the existing
- * app — a reading only exists after a `sonar_shot` command (see
- * requestTankReading below, which reuses the same command the technical
- * app's Sonar tab already sends; SonarDbg notifications are armed
- * automatically on connect, so this is safe to call directly).
+ *   percent = clamp((tankHeightMm - dist_mm) / tankHeightMm * 100, 0, 100)
+ *   liters  = percent/100 * tank_l
  *
- * INTERIM: this linear mm->litre calc is a placeholder. Long-term, the
- * firmware is expected to compute litres itself from sonar + tank version
- * and report it directly — see patch.md §2 for the planned field and what
- * needs to change here once it lands.
+ * where `tankHeightMm` is the phone-local setting in
+ * lib/settings/tankHeightSettings.ts (Settings → Tank setup → Tank height):
+ * the sonar distance reading when the tank is empty (sensor mounted at the
+ * top, looking down at the bottom).
+ *
+ * The sonar sensor is NOT polled continuously by the firmware — a reading
+ * only exists after a `sonar_shot` command (see requestTankReading below,
+ * reusing the same command the technical app's Sonar tab sends; SonarDbg
+ * notifications are armed automatically on connect). Home requests one on
+ * a timer (see TANK_REFRESH_MS in routes/index.tsx) and logs each resulting
+ * level to lib/device/tankLog.ts, which derives the "water used" figure.
  */
 import type { NjordConfig } from "./types";
 import { sendCommand } from "./store";
@@ -40,22 +47,22 @@ export interface TankSummary {
 export function summarizeTank(
   config: NjordConfig | undefined,
   distMm: number | undefined,
+  tankHeightMm: number,
 ): TankSummary {
   const capacityLiters = config?.tank_l ?? 0;
 
-  if (!config || distMm == null) {
+  if (distMm == null || tankHeightMm <= 0) {
     return { liters: null, capacityLiters, percent: null, low: false, hasReading: false };
   }
 
-  const raw = (config.tank_max_mm - distMm) * config.fill_l_mm;
-  const liters = Math.max(0, Math.min(capacityLiters, raw));
-  const percent = capacityLiters > 0 ? Math.round((liters / capacityLiters) * 100) : null;
+  const percent = Math.max(0, Math.min(100, Math.round(((tankHeightMm - distMm) / tankHeightMm) * 100)));
+  const liters = capacityLiters > 0 ? (percent / 100) * capacityLiters : null;
 
   return {
     liters,
     capacityLiters,
     percent,
-    low: percent !== null && percent <= TANK_LOW_PERCENT,
+    low: percent <= TANK_LOW_PERCENT,
     hasReading: true,
   };
 }
@@ -64,3 +71,4 @@ export function summarizeTank(
 export function requestTankReading(deviceId: string) {
   return sendCommand(deviceId, "sonar_shot");
 }
+

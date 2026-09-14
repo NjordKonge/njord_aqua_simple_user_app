@@ -13,6 +13,7 @@ import { summarizeProgress, type ProgressSummary } from "./progress";
 import { summarizeCycleRing, type CycleRingSummary } from "./cycleRing";
 import { summarizeWaterStatus, type WaterStatusSummary } from "./waterStatus";
 import { summarizeTank, type TankSummary } from "./tank";
+import { useTankHeightMm } from "../settings/tankHeightSettings";
 import { wattsFromStatus } from "./power";
 import { dosingModeFromConfig, type DosingMode } from "./dosing";
 import type { Device } from "./types";
@@ -71,13 +72,14 @@ export function useDeviceSummary(deviceId: string | undefined): DeviceSummary {
   const device = useDevice(deviceId);
   const config = useConfig(deviceId);
   const sonar = useSonar(deviceId);
+  const tankHeightMm = useTankHeightMm();
 
   const status = summarizeStatus(device);
   const waterStatus = summarizeWaterStatus(device);
   const online = Boolean(device?.online);
   const health = device && online ? summarizeHealth(device.status) : null;
   const progress = device && online ? summarizeProgress(device.status) : null;
-  const tank = summarizeTank(config, sonar?.dist_mm);
+  const tank = summarizeTank(config, sonar?.dist_mm, tankHeightMm);
   const dosingMode = dosingModeFromConfig(config);
 
   const hasFault = Boolean(device && device.status.fault !== "NONE");
