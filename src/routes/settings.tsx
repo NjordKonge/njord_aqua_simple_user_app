@@ -45,6 +45,7 @@ import { PickerSheet } from "@/components/ui/PickerSheet";
 import { InfoSheet } from "@/components/ui/InfoSheet";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { FirmwareUpdatePanel } from "@/components/settings/FirmwareUpdatePanel";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/settings")({
@@ -301,6 +302,8 @@ function SettingsScreen() {
           onCommit={(v) => setTreatmentMinutes(v)}
         />
       </section>
+
+      <FirmwareUpdatePanel device={device} />
 
       {/* Alert information */}
       <Button variant="secondary" onClick={() => setAlertInfoOpen(true)}>

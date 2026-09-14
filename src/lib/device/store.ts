@@ -471,6 +471,13 @@ function encodeCommand(reqId: number, cmd: string, data?: unknown): string | { e
     // no-op, but it lets the user wipe a stale bond left over from an older
     // MITM-pairing firmware without a factory reset.
     case "remove_bond":         return head("REMOVEBOND");
+    // Reboots the device straight into the ST BLE_Ota loader (see
+    // ota_app_integration_patch.md §1.1). NOTE: the wire command name here
+    // ("OTAREBOOT") follows the same ALL-CAPS convention as every other
+    // command on this characteristic (REBOOT, CLEARFAULT, …) — if the
+    // firmware team wired the actual command up under a different literal,
+    // this is the one line to change.
+    case "ota_reboot":          return head("OTAREBOOT");
     case "step_up":
       return { error: `${cmd} not supported on API v2.0 firmware` };
     case "set_timer": {
