@@ -59,18 +59,11 @@ function HomeScreen() {
   const deviceId = devices[0]?.id;
   const summary = useDeviceSummary(deviceId);
   const {
-    device, name, status, waterStatus, health, watts, tank, dosingMode, cycleSeconds, targetMa,
+    device, name, status, health, watts, tank, dosingMode, cycleSeconds, targetMa,
     electrolysisOn, electrolysisState, actions, attention,
   } = summary;
   const [infoOpen, setInfoOpen] = useState(false);
   const [modeInfoOpen, setModeInfoOpen] = useState(false);
-
-  // Which error the user has closed. Stored as the error's own text rather
-  // than a boolean so dismissal only ever applies to *that* error: if the
-  // fault changes, or clears and later comes back, the row returns on its
-  // own. A plain boolean would let one tap permanently silence every future
-  // fault, which is not something a water-treatment device should allow.
-  const [dismissedError, setDismissedError] = useState<string | null>(null);
 
   // Optimistic mode display: SETCFG/START/STOP round-trip over BLE (ack,
   // then a separate config re-read) before `dosingMode` derived from the
@@ -108,27 +101,23 @@ function HomeScreen() {
     treatmentMinutes,
   );
 
-  // Only a genuine fault is closable, and only until it changes.
-  const isFault = waterStatus.status === "error";
-  const faultDismissed = isFault && dismissedError === waterStatus.message;
-
-  // A real device fault always wins over the timer heuristic — it's an
-  // actual signal, the timer is only a placeholder for when there isn't
-  // one. Otherwise, big and simple: red/yellow/green off the timer, or a
-  // neutral "connect the device" state when there's nothing to report.
+  // Water status is deliberately just the safe/being-treated/not-treated
+  // timer heuristic — a real device fault is a separate concern and only
+  // ever shown in the "Needs attention" list below (see attention, sourced
+  // from device.alarms), so the same fault is never spelled out twice on
+  // Home. Big and simple: red/yellow/green off the timer, or a neutral
+  // "connect the device" state when there's nothing to report.
   const waterPanel = !device?.online
     ? { tone: "info" as const, headline: "Unknown", message: "Connect the device to see water status." }
-    : isFault && !faultDismissed
-      ? { tone: "bad" as const, headline: "Needs attention", message: waterStatus.message }
-      : treatmentStatus.status === "green"
-        ? { tone: "good" as const, headline: "Safe to use", message: "Water is safe to use." }
-        : treatmentStatus.status === "yellow"
-          ? {
-              tone: "warn" as const,
-              headline: "Being treated",
-              message: `Water is being treated — wait about ${treatmentStatus.remainingMinutes} more minute${treatmentStatus.remainingMinutes === 1 ? "" : "s"}.`,
-            }
-          : { tone: "bad" as const, headline: "Not treated", message: "Water is not treated — turn on treatment." };
+    : treatmentStatus.status === "green"
+      ? { tone: "good" as const, headline: "Safe to use", message: "Water is safe to use." }
+      : treatmentStatus.status === "yellow"
+        ? {
+            tone: "warn" as const,
+            headline: "Being treated",
+            message: `Water is being treated — wait about ${treatmentStatus.remainingMinutes} more minute${treatmentStatus.remainingMinutes === 1 ? "" : "s"}.`,
+          }
+        : { tone: "bad" as const, headline: "Not treated", message: "Water is not treated — turn on treatment." };
 
   // One place deciding what the electrolysis badge says, so the wording and
   // the cell animation can never disagree about whether it's running.
@@ -227,7 +216,6 @@ function HomeScreen() {
         headline={waterPanel.headline}
         message={waterPanel.message}
         onInfo={() => setInfoOpen(true)}
-        onDismiss={isFault && !faultDismissed ? () => setDismissedError(waterStatus.message) : undefined}
       />
 
       {/* WATER CONTROL — the primary panel. Everything that is true *right
