@@ -23,11 +23,11 @@
      site, so every existing plain `bg-surface` card across the app (Device
      card, Water status, alerts, sheets, buttons…) becomes glass for free. */
   --color-bg: #0a2233;
-  --color-surface: rgb(255 255 255 / 0.10);
-  --color-surface-muted: rgb(255 255 255 / 0.06);
-  --color-surface-raised: rgb(255 255 255 / 0.16);
-  --color-border: rgb(255 255 255 / 0.30);
-  --color-border-soft: rgb(255 255 255 / 0.16);
+  --color-surface: rgb(255 255 255 / 0.14);
+  --color-surface-muted: rgb(255 255 255 / 0.08);
+  --color-surface-raised: rgb(255 255 255 / 0.20);
+  --color-border: rgb(255 255 255 / 0.32);
+  --color-border-soft: rgb(255 255 255 / 0.22);
 
   --color-content: #f2fbff;
   --color-muted: rgb(255 255 255 / 0.74);
@@ -47,11 +47,11 @@
      deeper layer than the default glass card (still used with a `/NN`
      opacity suffix at each call site, kept solid here rather than baked
      translucent — see Home's tank/gauge cards). */
-  --color-brand-deep: #123a56;
+  --color-brand-deep: #1d5a80;
   /* Mid water-blue for the live-status panels, a shade lighter than
      brand-deep so the two blue cards on Home still read as distinct
      surfaces rather than one long slab. */
-  --color-water: #1c4f70;
+  --color-water: #2a6d97;
   /* The water itself inside the tank illustration — deliberately brighter
      and greener than the brand blues so a filled tank reads as liquid, not
      as another panel. */
@@ -285,8 +285,19 @@
     font-weight: 500;
     letter-spacing: 0;
   }
-  /* Small-caps description paired with a value. Pairs with `.type-value`. */
+  /* Small description paired with a value. Pairs with `.type-value`. Plain
+     sentence case (not uppercase) — the reference aesthetic reserves
+     all-caps for the header tagline alone (see `.type-eyebrow`), every
+     other supporting label reads as normal text. */
   .type-cap {
+    font-size: 0.6875rem; /* 11sp */
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+  /* Small-caps eyebrow — used only for the Header tagline. Kept separate
+     from `.type-cap` so the one deliberately-uppercase piece of copy in the
+     app doesn't drag every other supporting label into caps with it. */
+  .type-eyebrow {
     font-size: 0.6875rem; /* 11sp */
     font-weight: 600;
     letter-spacing: 0.06em;

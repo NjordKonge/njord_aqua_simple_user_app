@@ -41,6 +41,8 @@ export function Thermometer({
   textClassName = "text-on-fill",
   subTextClassName = "text-on-fill/55",
   placeholder,
+  showScale = true,
+  className,
 }: {
   value: number | null;
   min?: number;
@@ -56,6 +58,10 @@ export function Thermometer({
   subTextClassName?: string;
   /** Shown instead of the number when there is no reading (or it's idle). */
   placeholder?: string;
+  /** Tick marks along the tube + min/max flanking labels. Off for a
+   * cleaner, icon-like look where the scale would just be visual noise. */
+  showScale?: boolean;
+  className?: string;
 }) {
   const span = max - min || 1;
   const rawFrac = value === null ? 0 : (value - min) / span;
@@ -89,7 +95,7 @@ export function Thermometer({
   const tickX = TUBE_CX + TUBE_W / 2 + 3;
 
   return (
-    <div className="flex flex-col items-center">
+    <div className={cn("flex flex-col items-center", className)}>
       <div className="relative" style={{ width: size, height: size }}>
         <svg width={size} height={size} className="block">
           {/* Track and liquid are both drawn as plain fills (tube + bulb),
@@ -116,21 +122,24 @@ export function Thermometer({
             fill={color}
           />
 
-          {/* Scale marks down the side of the tube. */}
-          <g>
-            {ticks.map((t, i) => (
-              <line
-                key={i}
-                x1={tickX}
-                y1={t.y}
-                x2={tickX + t.len}
-                y2={t.y}
-                stroke={trackColor}
-                strokeWidth={i === 0 || i === TICK_COUNT - 1 ? 2 : 1}
-                strokeLinecap="round"
-              />
-            ))}
-          </g>
+          {/* Scale marks down the side of the tube — omitted entirely when
+              `showScale` is false, for a cleaner icon-like look. */}
+          {showScale ? (
+            <g>
+              {ticks.map((t, i) => (
+                <line
+                  key={i}
+                  x1={tickX}
+                  y1={t.y}
+                  x2={tickX + t.len}
+                  y2={t.y}
+                  stroke={trackColor}
+                  strokeWidth={i === 0 || i === TICK_COUNT - 1 ? 2 : 1}
+                  strokeLinecap="round"
+                />
+              ))}
+            </g>
+          ) : null}
         </svg>
 
         {/* Reading, beside the tube rather than under it — the tall narrow
@@ -149,11 +158,15 @@ export function Thermometer({
         </div>
       </div>
 
-      <div className="mt-1 flex w-full items-center justify-between px-1">
-        <span className={cn("type-label", subTextClassName)}>{min}</span>
-        <span className={cn("type-cap", subTextClassName)}>{label}</span>
-        <span className={cn("type-label", subTextClassName)}>{max}</span>
-      </div>
+      {showScale ? (
+        <div className="mt-1 flex w-full items-center justify-between px-1">
+          <span className={cn("type-label", subTextClassName)}>{min}</span>
+          <span className={cn("type-cap", subTextClassName)}>{label}</span>
+          <span className={cn("type-label", subTextClassName)}>{max}</span>
+        </div>
+      ) : (
+        <p className={cn("mt-1 type-cap", subTextClassName)}>{label}</p>
+      )}
     </div>
   );
 }

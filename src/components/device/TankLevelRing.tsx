@@ -19,7 +19,7 @@ export function TankLevelRing({
   low?: boolean;
   size?: number;
 }) {
-  const stroke = Math.max(8, size * 0.09);
+  const stroke = Math.max(10, size * 0.14);
   const radius = size / 2 - stroke / 2;
   const circumference = 2 * Math.PI * radius;
   const clamped = Math.max(0, Math.min(100, percent));
@@ -34,7 +34,7 @@ export function TankLevelRing({
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="rgb(255 255 255 / 0.14)"
+          stroke="rgb(255 255 255 / 0.20)"
           strokeWidth={stroke}
         />
         <circle

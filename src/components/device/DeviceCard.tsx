@@ -1,5 +1,4 @@
-import { Bluetooth, BluetoothOff, Loader2 } from "lucide-react";
-import { StatusBadge } from "@/components/ui/StatusBadge";
+import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -28,8 +27,8 @@ export function DeviceCard({
   const state = reconnecting ? "connecting" : online ? "online" : "offline";
 
   return (
-    <div className="surface-lift flex items-center gap-4 overflow-hidden rounded-card border border-border-soft bg-surface p-4">
-      <div className="relative flex h-16 w-20 shrink-0 items-center justify-center">
+    <div className="surface-lift flex items-center gap-3 overflow-hidden rounded-card border border-border-soft bg-surface p-3">
+      <div className="relative flex h-14 w-16 shrink-0 items-center justify-center">
         <img
           src="/njord-device.png"
           alt=""
@@ -49,22 +48,35 @@ export function DeviceCard({
         ) : null}
       </div>
 
+      {/* Two lines, not three — name (+ freshness, right-aligned on the
+          same row) then a bare dot + status word, rather than a separate
+          tinted pill. Matches the reference's flatter, less chrome-heavy
+          card. */}
       <div className="min-w-0 flex-1">
-        <p className="truncate type-heading text-content">{name}</p>
-        <div className="mt-1.5">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="truncate type-heading text-content">{name}</p>
+          {freshness ? <p className="shrink-0 type-label text-faint">{freshness}</p> : null}
+        </div>
+        <div className="mt-1 flex items-center gap-1.5">
           {state === "connecting" ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-info/12 px-2.5 py-1 type-label text-info">
-              <Loader2 size={13} strokeWidth={2.2} className="animate-spin" />
-              Connecting…
-            </span>
-          ) : state === "online" ? (
-            <StatusBadge tone="good" label="Connected" icon={Bluetooth} />
+            <>
+              <Loader2 size={13} strokeWidth={2.2} className="shrink-0 animate-spin text-info" />
+              <span className="type-label text-info">Connecting…</span>
+            </>
           ) : (
-            <StatusBadge tone="bad" label="Not connected" icon={BluetoothOff} />
+            <>
+              <span
+                aria-hidden
+                className={cn("h-2 w-2 shrink-0 rounded-full", state === "online" ? "bg-good" : "bg-bad")}
+              />
+              <span className={cn("type-label", state === "online" ? "text-good" : "text-bad")}>
+                {state === "online" ? "Connected" : "Not connected"}
+              </span>
+            </>
           )}
         </div>
-        {freshness ? <p className="mt-1.5 type-label text-faint">{freshness}</p> : null}
       </div>
     </div>
   );
 }
+

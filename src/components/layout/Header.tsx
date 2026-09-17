@@ -16,7 +16,7 @@ export function Header({ right, tagline }: { right?: ReactNode; tagline?: string
           Njord Aqua
         </span>
         {tagline ? (
-          <span className="type-cap mt-0.5 block whitespace-pre-line leading-snug text-faint">{tagline}</span>
+          <span className="type-eyebrow mt-0.5 block whitespace-pre-line leading-snug text-faint">{tagline}</span>
         ) : null}
       </div>
       {right}

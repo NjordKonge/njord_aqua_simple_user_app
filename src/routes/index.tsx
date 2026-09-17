@@ -217,7 +217,7 @@ function HomeScreen() {
   }
 
   return (
-    <div className="stagger space-y-6">
+    <div className="stagger space-y-4">
       <Header
         tagline={"Cleaner water\nBrighter tomorrow"}
         right={
@@ -232,7 +232,7 @@ function HomeScreen() {
       />
 
       <div className="flex items-baseline justify-between">
-        <h1 className="type-title text-content">Tank 1</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-content">Tank 1</h1>
         <p className="type-label text-faint">{BUILD_TAG}</p>
       </div>
 
@@ -287,16 +287,20 @@ function HomeScreen() {
 
           {/* Volume, centered under the ring — matches the reference's
               single stacked "value / of capacity" readout rather than a
-              divided table strip. 24h usage is kept, just folded in as a
-              small unobtrusive third line rather than its own column, so
-              the figure isn't lost even though the mockup doesn't show it. */}
-          <div className="flex flex-col items-center gap-0.5 border-t border-white/10 pt-2 text-center">
+              divided table strip. No hairline above it (the reference has
+              no divider here, just spacing) — low-tank still colors the
+              ring itself, but the volume figure stays plain white so a low
+              reading never looks like an error state. 24h usage is kept,
+              just folded in as a small unobtrusive third line rather than
+              its own column, so the figure isn't lost even though the
+              reference doesn't show it. */}
+          <div className="flex flex-col items-center gap-0.5 pt-1 text-center">
             <AnimatedNumber
               value={tank.hasReading ? tank.liters : null}
               decimals={0}
               unit=" L"
-              className={cn("text-lg font-semibold tabular-nums", tank.low ? "text-warn" : "text-content")}
-              unitClassName={tank.low ? "text-warn" : "text-content"}
+              className="text-lg font-semibold tabular-nums text-content"
+              unitClassName="text-content"
             />
             <p className="type-cap text-faint">of {tank.capacityLiters} L</p>
             {/* Water used — the firmware has no flow sensor, so this is a
@@ -322,19 +326,29 @@ function HomeScreen() {
             </div>
             <ChevronRight size={16} className="shrink-0 text-faint" />
           </div>
-          {/* Small decorative trend squiggle — purely ambient texture (like
-              the background bubbles/rays), not a real chart of readings, so
-              it never claims to represent data that isn't tracked. */}
-          <svg viewBox="0 0 96 24" className="mt-1 h-4 w-full text-brand/40" preserveAspectRatio="none" aria-hidden>
-            <path
-              d="M0 16 Q8 6 16 14 T32 12 T48 18 T64 8 T80 15 T96 10"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              strokeLinecap="round"
-            />
-          </svg>
-          <div className="flex flex-1 items-center justify-center px-1 py-1">
+          <div className="relative flex flex-1 items-center justify-center overflow-hidden px-1 py-1">
+            {/* Small decorative ripple — purely ambient texture (like the
+                background bubbles/rays), not a real chart of readings, so
+                it never claims to represent data that isn't tracked. Sits
+                behind the thermometer (z-0, low opacity) rather than as its
+                own strip, and every control point is an explicit
+                coordinate inside the viewBox (no chained `T` reflections,
+                which is what previously let the curve's amplitude grow
+                past the box each segment and spike outside the card). */}
+            <svg
+              viewBox="0 0 96 24"
+              preserveAspectRatio="none"
+              className="pointer-events-none absolute inset-x-1 top-1 z-0 h-4 w-[calc(100%-0.5rem)] overflow-hidden text-brand/25"
+              aria-hidden
+            >
+              <path
+                d="M2 14 C 10 6, 14 6, 22 12 C 30 18, 34 18, 42 11 C 50 4, 54 4, 62 12 C 70 20, 74 20, 82 12 C 87 8, 90 8, 94 11"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+              />
+            </svg>
             <Thermometer
               value={health?.temperature.available ? health.temperature.celsius : null}
               max={gaugeRanges.tempMaxC}
@@ -345,6 +359,8 @@ function HomeScreen() {
               trackColor="rgb(255 255 255 / 0.14)"
               textClassName="text-content"
               subTextClassName="text-faint"
+              showScale={false}
+              className="relative z-10"
             />
           </div>
         </div>
@@ -385,19 +401,30 @@ function HomeScreen() {
 
         {/* LIVE ELECTROLYSIS STATUS — everything about the process while
             it's actually running: a clean semi-circular gauge of the
-            cycle's power draw (shown as a percentage of the configured
-            max, per spec) and the plain-language status the badge carries.
-            No trailing icon, matching the reference — this card has no
+            cycle's actual power draw in watts (not a bare percentage —
+            watts is the figure that means something on its own) and the
+            plain-language status the badge carries, folded onto the title
+            row as a compact dot + label rather than its own line. No
+            trailing icon, matching the reference — this card has no
             secondary action, so there's nothing for one to trigger. */}
         <div className="surface-lift flex min-w-0 flex-col overflow-hidden rounded-card border border-white/15 bg-water/40 p-3">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <Zap size={14} className="shrink-0 text-brand" />
-            <p className="text-[0.75rem] font-semibold leading-tight tracking-tight text-content">Electrolysis status</p>
+          <div className="flex min-w-0 items-center justify-between gap-1.5">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <Zap size={14} className="shrink-0 text-brand" />
+              <p className="text-[0.75rem] font-semibold leading-tight tracking-tight text-content">Electrolysis status</p>
+            </div>
+            <p className={cn("flex shrink-0 items-center gap-1 text-[0.625rem] font-medium", BADGE_TEXT[electrolysisBadge.tone])}>
+              <span aria-hidden className={cn("h-1.5 w-1.5 rounded-full", BADGE_DOT[electrolysisBadge.tone])} />
+              {electrolysisBadge.label}
+            </p>
           </div>
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 pt-2">
+          <div className="flex flex-1 items-center justify-center pt-2">
             <GaugeArc
               percent={watts != null && gaugeRanges.wattsMax > 0 ? (watts / gaugeRanges.wattsMax) * 100 : 0}
               hasReading={watts != null}
+              value={watts ?? undefined}
+              valueUnit=" W"
+              decimals={1}
               label="Power"
               size={112}
               // "waiting" = this cycle's charge target is already reached and
@@ -406,13 +433,6 @@ function HomeScreen() {
               // broken/stuck. Say so explicitly instead.
               placeholder={electrolysisState === "waiting" ? "Waiting\u2026" : undefined}
             />
-            {/* Plain-language running/off/waiting status, compact — a dot +
-                label rather than the full illustrated status panel, closer
-                to how the reference keeps this card to just the gauge. */}
-            <p className={cn("flex items-center gap-1.5 text-xs font-medium", BADGE_TEXT[electrolysisBadge.tone])}>
-              <span aria-hidden className={cn("h-1.5 w-1.5 rounded-full", BADGE_DOT[electrolysisBadge.tone])} />
-              {electrolysisBadge.label}
-            </p>
           </div>
         </div>
       </div>
@@ -526,11 +546,14 @@ function DosingModeToggle({
     high: "text-on-fill",
   };
   // CSS colour expressions for the sliding thumb — flat fill, no gradient.
-  // "High" uses the restrained accent colour rather than a second shade of
-  // green, since off/normal already carry the real bad/good device-state
-  // meaning and high is just a stronger selection of the same "good" state.
+  // "Off" is a deliberate user choice, not a fault, so it gets a neutral
+  // slate rather than the semantic "bad" red (which is reserved for actual
+  // device/connection faults elsewhere in the app — an off toggle should
+  // never look like an alarm). "High" uses the restrained accent colour
+  // rather than a second shade of green, since normal/high are both "good"
+  // states and high is just a stronger selection of the same one.
   const THUMB_COLOR: Record<DosingMode, string> = {
-    off: "var(--color-bad)",
+    off: "#64748b",
     normal: "var(--color-good)",
     high: "var(--color-accent)",
   };

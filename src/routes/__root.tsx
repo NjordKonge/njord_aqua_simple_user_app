@@ -78,30 +78,39 @@ function WaterBackground() {
 
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-      {/* Base water gradient — deep and dark so glass cards read clearly
-          against it rather than competing with a bright scene. */}
+      {/* Base water gradient — brighter/bluer than a plain dark navy, per
+          the sunlit-pool reference: glass cards get their contrast from
+          being lighter than this backdrop, not from it being near-black. */}
       <div
         className="absolute inset-0"
         style={{
           background:
-            "radial-gradient(130% 85% at 18% -12%, #1c4a68 0%, #0c2032 46%, #050f18 100%)",
+            "radial-gradient(130% 85% at 18% -12%, #2f7ba6 0%, #17557d 46%, #0d3450 100%)",
         }}
       />
-      {/* Faint diagonal light rays, toned down ~25% from a typical concept
-          render — present as atmosphere, never bright enough to compete
-          with card content. */}
+      {/* Caustic-style light rays — the reference's defining texture, so
+          brighter than a subtle atmosphere hint. Two layers at different
+          angles/scales read as rippling light rather than one flat stripe
+          pattern. */}
       <div
-        className="absolute inset-0 opacity-[0.07]"
+        className="absolute inset-0 opacity-[0.18]"
         style={{
           background:
             "repeating-linear-gradient(112deg, transparent 0 140px, rgb(255 255 255 / 0.6) 140px 150px, transparent 150px 300px)",
           mixBlendMode: "screen",
         }}
       />
-      {/* Soft electric-cyan sheen, off to one side — a hint of colour, not
-          a glow effect. */}
       <div
-        className="absolute -left-1/4 -top-1/4 h-[70%] w-[80%] opacity-[0.10]"
+        className="absolute inset-0 opacity-[0.10]"
+        style={{
+          background:
+            "repeating-linear-gradient(68deg, transparent 0 180px, rgb(255 255 255 / 0.6) 180px 188px, transparent 188px 360px)",
+          mixBlendMode: "screen",
+        }}
+      />
+      {/* Soft electric-cyan sheen, off to one side. */}
+      <div
+        className="absolute -left-1/4 -top-1/4 h-[70%] w-[80%] opacity-[0.18]"
         style={{
           background: "radial-gradient(closest-side, #38d6ff, transparent 70%)",
           filter: "blur(70px)",
@@ -126,12 +135,12 @@ function WaterBackground() {
           />
         ))}
       </div>
-      {/* Scrim: darkens/settles the scene so text and numbers in the glass
-          cards above stay high-contrast regardless of what's moving behind
-          them. */}
+      {/* Scrim: settles the scene just enough that text/numbers in the
+          glass cards stay legible, without flattening the brighter water
+          scene back down to near-black. */}
       <div
         className="absolute inset-0"
-        style={{ background: "linear-gradient(180deg, rgb(2 10 18 / 0.15), rgb(2 10 18 / 0.35) 60%, rgb(2 10 18 / 0.5))" }}
+        style={{ background: "linear-gradient(180deg, rgb(2 10 18 / 0.05), rgb(2 10 18 / 0.12) 60%, rgb(2 10 18 / 0.22))" }}
       />
     </div>
   );

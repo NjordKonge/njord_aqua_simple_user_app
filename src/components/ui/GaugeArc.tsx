@@ -17,13 +17,23 @@ export function GaugeArc({
   label,
   placeholder,
   size = 120,
+  value,
+  valueUnit,
+  decimals = 0,
 }: {
+  /** Drives the arc sweep — always a 0-100 fraction of the configured max,
+   * regardless of what's displayed as the center readout. */
   percent: number;
   hasReading: boolean;
   label: string;
-  /** Shown instead of the percentage when there is no reading (or it's idle). */
+  /** Shown instead of the readout when there is no reading (or it's idle). */
   placeholder?: string;
   size?: number;
+  /** Center readout value. Falls back to the rounded `percent` (with a "%"
+   * unit) when omitted, so existing percent-only call sites are unaffected. */
+  value?: number;
+  valueUnit?: string;
+  decimals?: number;
 }) {
   const stroke = Math.max(8, size * 0.12);
   const r = (size - stroke) / 2;
@@ -33,6 +43,8 @@ export function GaugeArc({
   const clamped = Math.max(0, Math.min(100, percent));
   const offset = circumference * (1 - clamped / 100);
   const height = size / 2 + stroke / 2;
+  const readout = value ?? clamped;
+  const readoutUnit = valueUnit ?? "%";
 
   return (
     <div className="flex flex-col items-center">
@@ -58,7 +70,10 @@ export function GaugeArc({
         </svg>
         <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-center pb-0.5">
           {hasReading && !placeholder ? (
-            <span className="type-value text-content">{Math.round(clamped)}%</span>
+            <span className="type-value text-content">
+              {readout.toFixed(decimals)}
+              {readoutUnit}
+            </span>
           ) : (
             <span className={cn("text-sm font-medium text-faint")}>{placeholder ?? "—"}</span>
           )}
