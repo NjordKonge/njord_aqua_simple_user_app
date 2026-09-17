@@ -2,7 +2,6 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
   Settings as SettingsIcon,
-  HelpCircle,
   BluetoothSearching,
   AlertTriangle,
   Droplet,
@@ -28,7 +27,6 @@ import { Header } from "@/components/layout/Header";
 import { WaterStatusPanel } from "@/components/device/WaterStatusPanel";
 import { TankLevelRing } from "@/components/device/TankLevelRing";
 import { DeviceCard } from "@/components/device/DeviceCard";
-import { ElectrolysisStatusPanel } from "@/components/device/ElectrolysisStatusPanel";
 import { InfoSheet } from "@/components/ui/InfoSheet";
 import { Button } from "@/components/ui/Button";
 import { GaugeArc } from "@/components/ui/GaugeArc";
@@ -48,6 +46,20 @@ export const Route = createFileRoute("/")({
 // level (lib/device/tankLog.ts), which is what the "Water used" figure is
 // derived from — so this cadence is also the log's sampling interval.
 const TANK_REFRESH_MS = 5_000;
+
+// Static lookups for the electrolysis status dot+label (good/warn/bad only
+// — this badge never shows "info"). Module-level and literal (never built
+// via template literals) so the Tailwind JIT scanner picks them up.
+const BADGE_TEXT: Record<"good" | "warn" | "bad", string> = {
+  good: "text-good",
+  warn: "text-warn",
+  bad: "text-bad",
+};
+const BADGE_DOT: Record<"good" | "warn" | "bad", string> = {
+  good: "bg-good",
+  warn: "bg-warn",
+  bad: "bg-bad",
+};
 
 // Config (and therefore dosingMode, derived from config.elec_en/cycle_c) is
 // otherwise only re-read after a START/STOP/SETCFG this app itself sent (see
@@ -207,14 +219,14 @@ function HomeScreen() {
   return (
     <div className="stagger space-y-6">
       <Header
-        tagline="Cleaner water, brighter tomorrow"
+        tagline={"Cleaner water\nBrighter tomorrow"}
         right={
           <button
             aria-label="Settings"
             onClick={() => navigate({ to: "/settings" })}
-            className="press rounded-full p-1.5 text-muted"
+            className="press surface-lift flex h-10 w-10 items-center justify-center rounded-full border border-border-soft bg-surface text-content"
           >
-            <SettingsIcon size={21} />
+            <SettingsIcon size={19} />
           </button>
         }
       />
@@ -249,17 +261,17 @@ function HomeScreen() {
           with minimal scrolling. Grid (not flex) so both rows independently
           match the height of their taller card, with each panel's own
           content centered in the space that leaves rather than stretched. */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-2.5">
         {/* TANK STATUS — a circular level ring instead of the old tank
             illustration, per the glass facelift's "circular progress
             indicator and a large percentage" spec. Still on a deep-blue
             backdrop (now translucent, not solid) so the ring's track reads
             clearly against it. */}
-        <div className="surface-lift flex min-w-0 flex-col overflow-hidden rounded-card border border-white/15 bg-brand-deep/45 p-4">
+        <div className="surface-lift flex min-w-0 flex-col overflow-hidden rounded-card border border-white/15 bg-brand-deep/45 p-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-1.5">
               <Droplet size={14} className="shrink-0 text-brand" />
-              <p className="text-[0.8125rem] font-semibold leading-tight tracking-tight text-content">Tank status</p>
+              <p className="text-[0.8125rem] font-semibold leading-tight tracking-tight text-content">Tank level</p>
             </div>
             <ChevronRight size={16} className="shrink-0 text-faint" />
           </div>
@@ -273,22 +285,27 @@ function HomeScreen() {
             />
           </div>
 
-          {/* Volume + 24h usage as a typographic strip rather than one
-              run-on caption: the figure carries the weight, the word beneath
-              it stays small and quiet, so the numbers are scannable at a
-              glance and the labels never compete with them. */}
-          <div className="grid grid-cols-2 divide-x divide-white/10 border-t border-white/10 pt-1">
-            <TankStat
+          {/* Volume, centered under the ring — matches the reference's
+              single stacked "value / of capacity" readout rather than a
+              divided table strip. 24h usage is kept, just folded in as a
+              small unobtrusive third line rather than its own column, so
+              the figure isn't lost even though the mockup doesn't show it. */}
+          <div className="flex flex-col items-center gap-0.5 border-t border-white/10 pt-2 text-center">
+            <AnimatedNumber
               value={tank.hasReading ? tank.liters : null}
-              unit="L"
-              label={`of ${tank.capacityLiters}L`}
-              emphasis={tank.low ? "warn" : "normal"}
+              decimals={0}
+              unit=" L"
+              className={cn("text-lg font-semibold tabular-nums", tank.low ? "text-warn" : "text-content")}
+              unitClassName={tank.low ? "text-warn" : "text-content"}
             />
+            <p className="type-cap text-faint">of {tank.capacityLiters} L</p>
             {/* Water used — the firmware has no flow sensor, so this is a
                 rough figure reconstructed from the logged tank level (sum of
                 drops over the last 24h; a rise is a refill, not usage — see
                 lib/device/tankLog.ts). Blank until enough samples exist. */}
-            <TankStat value={tankUsage.usedLiters} unit="L" label="Used" emphasis="quiet" />
+            {tankUsage.usedLiters != null ? (
+              <p className="text-[0.625rem] font-medium text-faint/70">{tankUsage.usedLiters} L used today</p>
+            ) : null}
           </div>
         </div>
 
@@ -297,7 +314,7 @@ function HomeScreen() {
             of being squeezed down to fit alongside a second gauge. Tinted
             electric cyan (the app's one interactive/accent colour) rather
             than plain white, per spec. */}
-        <div className="surface-lift flex min-w-0 flex-col overflow-hidden rounded-card border border-white/15 bg-water/40 p-4">
+        <div className="surface-lift flex min-w-0 flex-col overflow-hidden rounded-card border border-white/15 bg-water/40 p-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-1.5">
               <ThermometerIcon size={14} className="shrink-0 text-brand" />
@@ -305,7 +322,19 @@ function HomeScreen() {
             </div>
             <ChevronRight size={16} className="shrink-0 text-faint" />
           </div>
-          <div className="flex flex-1 items-center justify-center px-1 py-2">
+          {/* Small decorative trend squiggle — purely ambient texture (like
+              the background bubbles/rays), not a real chart of readings, so
+              it never claims to represent data that isn't tracked. */}
+          <svg viewBox="0 0 96 24" className="mt-1 h-4 w-full text-brand/40" preserveAspectRatio="none" aria-hidden>
+            <path
+              d="M0 16 Q8 6 16 14 T32 12 T48 18 T64 8 T80 15 T96 10"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+            />
+          </svg>
+          <div className="flex flex-1 items-center justify-center px-1 py-1">
             <Thermometer
               value={health?.temperature.available ? health.temperature.celsius : null}
               max={gaugeRanges.tempMaxC}
@@ -321,21 +350,19 @@ function HomeScreen() {
         </div>
 
         {/* DISINFECTION CONTROL — the control that drives the process: set
-            it here, see its effect over in Live electrolysis status. */}
-        <div className="surface-lift flex min-w-0 flex-col overflow-hidden rounded-card border border-white/15 bg-water/40 p-4">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex min-w-0 items-start gap-1.5">
-              <Shield size={14} className="mt-0.5 shrink-0 text-brand" />
-              <p className="text-[0.75rem] font-semibold leading-tight tracking-tight text-content">Disinfection control</p>
-            </div>
-            <button
-              aria-label="More information"
-              onClick={() => setModeInfoOpen(true)}
-              className="press shrink-0 rounded-full p-1 text-faint"
-            >
-              <HelpCircle size={16} />
-            </button>
-          </div>
+            it here, see its effect over in Live electrolysis status. No
+            trailing icon (the reference keeps this card chrome-free) — the
+            header row itself is the info-sheet trigger instead of a
+            separate button, so the affordance isn't lost, just less loud. */}
+        <div className="surface-lift flex min-w-0 flex-col overflow-hidden rounded-card border border-white/15 bg-water/40 p-3">
+          <button
+            aria-label="Disinfection control — more information"
+            onClick={() => setModeInfoOpen(true)}
+            className="press flex min-w-0 items-center gap-1.5 text-left"
+          >
+            <Shield size={14} className="shrink-0 text-brand" />
+            <p className="text-[0.75rem] font-semibold leading-tight tracking-tight text-content">Disinfection control</p>
+          </button>
           <div className="flex flex-1 flex-col justify-center pt-3">
             <p className="mb-1.5 type-cap text-faint">Treatment setting</p>
             <DosingModeToggle
@@ -359,14 +386,13 @@ function HomeScreen() {
         {/* LIVE ELECTROLYSIS STATUS — everything about the process while
             it's actually running: a clean semi-circular gauge of the
             cycle's power draw (shown as a percentage of the configured
-            max, per spec) and the plain-language status the badge carries. */}
-        <div className="surface-lift flex min-w-0 flex-col overflow-hidden rounded-card border border-white/15 bg-water/40 p-4">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex min-w-0 items-start gap-1.5">
-              <Zap size={14} className="mt-0.5 shrink-0 text-brand" />
-              <p className="text-[0.75rem] font-semibold leading-tight tracking-tight text-content">Live electrolysis status</p>
-            </div>
-            <ChevronRight size={16} className="mt-0.5 shrink-0 text-faint" />
+            max, per spec) and the plain-language status the badge carries.
+            No trailing icon, matching the reference — this card has no
+            secondary action, so there's nothing for one to trigger. */}
+        <div className="surface-lift flex min-w-0 flex-col overflow-hidden rounded-card border border-white/15 bg-water/40 p-3">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <Zap size={14} className="shrink-0 text-brand" />
+            <p className="text-[0.75rem] font-semibold leading-tight tracking-tight text-content">Electrolysis status</p>
           </div>
           <div className="flex flex-1 flex-col items-center justify-center gap-2 pt-2">
             <GaugeArc
@@ -380,13 +406,13 @@ function HomeScreen() {
               // broken/stuck. Say so explicitly instead.
               placeholder={electrolysisState === "waiting" ? "Waiting\u2026" : undefined}
             />
-            <ElectrolysisStatusPanel
-              tone={electrolysisBadge.tone}
-              label={electrolysisBadge.label}
-              active={electrolysisOn && device.online}
-              showCaption={false}
-              className="w-full"
-            />
+            {/* Plain-language running/off/waiting status, compact — a dot +
+                label rather than the full illustrated status panel, closer
+                to how the reference keeps this card to just the gauge. */}
+            <p className={cn("flex items-center gap-1.5 text-xs font-medium", BADGE_TEXT[electrolysisBadge.tone])}>
+              <span aria-hidden className={cn("h-1.5 w-1.5 rounded-full", BADGE_DOT[electrolysisBadge.tone])} />
+              {electrolysisBadge.label}
+            </p>
           </div>
         </div>
       </div>
@@ -479,49 +505,6 @@ function HomeScreen() {
     </div>
   );
 }
-
-/**
- * One figure in the tank card's bottom strip. Sits on the dark brand-deep
- * surface, so the colours here are white-on-dark rather than the usual
- * token pairs. `quiet` is for the fixed capacity figure — it's a setting,
- * not a reading, so it shouldn't pull the same visual weight as the live
- * numbers beside it.
- */
-function TankStat({
-  value,
-  unit,
-  label,
-  emphasis,
-}: {
-  value: number | null;
-  unit: string;
-  label: string;
-  emphasis: "normal" | "warn" | "quiet";
-}) {
-  return (
-    <div className="flex min-w-0 flex-col items-center px-1 py-3">
-      {value === null ? (
-        <span className="type-value text-on-fill/40">—</span>
-      ) : (
-        <AnimatedNumber
-          value={value}
-          decimals={0}
-          unit={unit}
-          className={cn(
-            "text-lg font-semibold leading-tight tabular-nums",
-            emphasis === "warn" ? "text-warn" : emphasis === "quiet" ? "text-on-fill/55" : "text-on-fill",
-          )}
-          unitClassName={cn(
-            "ml-0.5 text-[11px] font-medium",
-            emphasis === "warn" ? "text-warn/80" : "text-on-fill/50",
-          )}
-        />
-      )}
-      <p className="mt-0.5 truncate type-cap text-on-fill/50">{label}</p>
-    </div>
-  );
-}
-
 
 function DosingModeToggle({
   mode,
