@@ -18,3 +18,4 @@ src/routeTree.gen.ts
 android/app/build/
 android/build/
 android/.gradle/
+public/ChatGPT Image*.png

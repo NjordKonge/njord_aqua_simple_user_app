@@ -47,6 +47,7 @@ export function BottomTabBar() {
           style={{
             backgroundColor: "color-mix(in srgb, var(--color-brand) 26%, transparent)",
             borderColor: "color-mix(in srgb, var(--color-brand) 55%, transparent)",
+            boxShadow: "0 0 20px 1px color-mix(in srgb, var(--color-brand) 60%, transparent)",
           }}
         />
       </span>
@@ -79,14 +80,16 @@ function TabLink({
     >
       {({ isActive }) => (
         <>
-          {/* The icon lifts a hair when selected — a small, brief cue that
-              reinforces the sliding pill without competing with it. */}
+          {/* Solid/filled + a soft cyan glow when selected, outline and
+              flat when not — the icon itself carries the same "chosen"
+              cue as the sliding pill behind it. */}
           <Icon
             size={20}
             strokeWidth={isActive ? 2.2 : 1.8}
+            fill={isActive ? "currentColor" : "none"}
             className={cn(
               "relative shrink-0 transition-transform duration-200 ease-[var(--ease-out-soft)]",
-              isActive && "-translate-y-px",
+              isActive && "-translate-y-px text-brand drop-shadow-[0_0_6px_rgba(34,211,238,0.85)]",
             )}
           />
           <span

@@ -28,7 +28,7 @@ export function DeviceCard({
 
   return (
     <div className="surface-lift flex items-center gap-3 overflow-hidden rounded-card border border-border-soft bg-surface p-3">
-      <div className="relative flex h-14 w-16 shrink-0 items-center justify-center">
+      <div className="relative flex h-24 w-28 shrink-0 items-center justify-center">
         <img
           src="/njord-device.png"
           alt=""
@@ -42,7 +42,7 @@ export function DeviceCard({
         {state === "online" ? (
           <span
             aria-hidden
-            className="pointer-events-none absolute right-[1.15rem] top-1/2 h-1.5 w-1.5 -translate-y-1/2 animate-breathe rounded-full bg-[#37a6e8]"
+            className="pointer-events-none absolute right-[1.6rem] top-1/2 h-2 w-2 -translate-y-1/2 animate-breathe rounded-full bg-[#37a6e8]"
             style={{ boxShadow: "0 0 6px 1.5px rgb(55 166 232 / 0.7)" }}
           />
         ) : null}

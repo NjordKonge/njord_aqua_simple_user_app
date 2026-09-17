@@ -49,17 +49,17 @@ function RootLayout() {
 }
 
 /**
- * The "data floating in water" backdrop: a deep navy-to-water-blue gradient,
- * a few faint diagonal light rays, a soft cyan sheen, and a handful of slow
- * ambient bubbles — all CSS/SVG, no photo asset (kept dependency-free and
- * licence-free). Everything here is toned down noticeably from a "concept
- * render": low opacity throughout, slow motion, and a soft scrim over the
- * top so foreground text/numbers never fight the scenery for contrast.
+ * The "data floating in water" backdrop: a real underwater photo
+ * (public/water-scene.png — sunlit-pool caustics, user-supplied), given a
+ * very slow Ken-Burns drift so the scene feels alive without pulling the
+ * eye away from the glass cards, plus a soft cyan sheen, a handful of slow
+ * ambient bubbles, and a scrim over the top so foreground text/numbers
+ * never fight the photo for contrast.
  *
  * Fixed + behind `<main>` (z-0 vs its z-10) so it's one continuous scene
  * under every screen rather than something that scrolls with content.
  * `prefers-reduced-motion` already collapses all animation durations
- * globally (see styles.css), so the bubbles simply stop moving there
+ * globally (see styles.css), so the drift/bubbles simply stop moving there
  * instead of needing their own check.
  */
 function WaterBackground() {
@@ -78,39 +78,16 @@ function WaterBackground() {
 
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-      {/* Base water gradient — brighter/bluer than a plain dark navy, per
-          the sunlit-pool reference: glass cards get their contrast from
-          being lighter than this backdrop, not from it being near-black. */}
+      {/* The photo itself, scaled up and slowly drifting — scale(>1) keeps
+          the pan from ever exposing an edge of the image. */}
       <div
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(130% 85% at 18% -12%, #2f7ba6 0%, #17557d 46%, #0d3450 100%)",
-        }}
+        className="animate-scene-drift absolute inset-0 bg-cover bg-center"
+        style={{ backgroundImage: 'url("/water-scene.png")', willChange: "transform" }}
       />
-      {/* Caustic-style light rays — the reference's defining texture, so
-          brighter than a subtle atmosphere hint. Two layers at different
-          angles/scales read as rippling light rather than one flat stripe
-          pattern. */}
+      {/* Soft electric-cyan sheen, off to one side, to keep the same
+          "electric" accent the rest of the palette uses over the photo. */}
       <div
-        className="absolute inset-0 opacity-[0.18]"
-        style={{
-          background:
-            "repeating-linear-gradient(112deg, transparent 0 140px, rgb(255 255 255 / 0.6) 140px 150px, transparent 150px 300px)",
-          mixBlendMode: "screen",
-        }}
-      />
-      <div
-        className="absolute inset-0 opacity-[0.10]"
-        style={{
-          background:
-            "repeating-linear-gradient(68deg, transparent 0 180px, rgb(255 255 255 / 0.6) 180px 188px, transparent 188px 360px)",
-          mixBlendMode: "screen",
-        }}
-      />
-      {/* Soft electric-cyan sheen, off to one side. */}
-      <div
-        className="absolute -left-1/4 -top-1/4 h-[70%] w-[80%] opacity-[0.18]"
+        className="absolute -left-1/4 -top-1/4 h-[70%] w-[80%] opacity-[0.16]"
         style={{
           background: "radial-gradient(closest-side, #38d6ff, transparent 70%)",
           filter: "blur(70px)",
@@ -135,12 +112,12 @@ function WaterBackground() {
           />
         ))}
       </div>
-      {/* Scrim: settles the scene just enough that text/numbers in the
-          glass cards stay legible, without flattening the brighter water
-          scene back down to near-black. */}
+      {/* Scrim: settles the photo just enough that text/numbers in the
+          glass cards stay legible, without flattening it back down to
+          near-black. */}
       <div
         className="absolute inset-0"
-        style={{ background: "linear-gradient(180deg, rgb(2 10 18 / 0.05), rgb(2 10 18 / 0.12) 60%, rgb(2 10 18 / 0.22))" }}
+        style={{ background: "linear-gradient(180deg, rgb(2 10 18 / 0.10), rgb(2 10 18 / 0.16) 60%, rgb(2 10 18 / 0.30))" }}
       />
     </div>
   );
