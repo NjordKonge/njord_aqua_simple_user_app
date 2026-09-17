@@ -14,52 +14,72 @@
  * itself has been verified safe.
  * ------------------------------------------------------------------------- */
 @theme {
-  /* Surfaces — each step is a real elevation level, don't invent in-betweens. */
-  --color-bg: #f4f7f9;
-  --color-surface: #ffffff;
-  --color-surface-muted: #eef3f6;
-  --color-surface-raised: #e3eaef;
-  --color-border: #dce5ea;
-  --color-border-soft: #e7eef1;
+  /* Surfaces — "data floating in water": a deep water scene sits behind
+     every screen (see WaterBackground in __root.tsx), and cards are frosted
+     glass over it rather than opaque paper. Each token below is still a
+     real, distinct elevation level, just translucent instead of solid —
+     `--color-surface` in particular is baked in as a translucent white
+     rather than relying on a Tailwind `/NN` opacity suffix at every call
+     site, so every existing plain `bg-surface` card across the app (Device
+     card, Water status, alerts, sheets, buttons…) becomes glass for free. */
+  --color-bg: #0a2233;
+  --color-surface: rgb(255 255 255 / 0.10);
+  --color-surface-muted: rgb(255 255 255 / 0.06);
+  --color-surface-raised: rgb(255 255 255 / 0.16);
+  --color-border: rgb(255 255 255 / 0.30);
+  --color-border-soft: rgb(255 255 255 / 0.16);
 
-  --color-content: #142d3d;
-  --color-muted: #526674;
-  --color-faint: #63758a;
+  --color-content: #f2fbff;
+  --color-muted: rgb(255 255 255 / 0.74);
+  --color-faint: rgb(255 255 255 / 0.52);
 
   /* Text/icons drawn on top of a solid brand/status fill (buttons, selected
      segmented-control thumb) — plain white reads crisper on a saturated
      fill than the near-white page background does. */
   --color-on-fill: #ffffff;
 
-  --color-brand: #17658a;
-  --color-brand-deep: #0f4c68;
-  /* Lighter blue for the live-water panel, so the two blue cards on Home
-     read as distinct surfaces rather than one long slab. Still dark enough
-     for white body text (~5.5:1). */
-  --color-water: #1f6f95;
+  /* The one interactive/electric colour in the palette — primary buttons,
+     links, active nav, gauge fills. Deliberately the brightest, most
+     saturated thing on screen (never used decoratively), per "electric
+     cyan for interactive elements, active graphs, gauges, and icons". */
+  --color-brand: #22d3ee;
+  /* Rich, opaque-ish navy for surfaces that need to read as a distinctly
+     deeper layer than the default glass card (still used with a `/NN`
+     opacity suffix at each call site, kept solid here rather than baked
+     translucent — see Home's tank/gauge cards). */
+  --color-brand-deep: #123a56;
+  /* Mid water-blue for the live-status panels, a shade lighter than
+     brand-deep so the two blue cards on Home still read as distinct
+     surfaces rather than one long slab. */
+  --color-water: #1c4f70;
   /* The water itself inside the tank illustration — deliberately brighter
      and greener than the brand blues so a filled tank reads as liquid, not
      as another panel. */
   --color-water-fill: #4fb3d9;
   /* Restrained accent — sparingly, for the one UI "selected/elevated"
      highlight that isn't itself a device-safety status (High chlorination
-     mode). Not used for navigation or dropdown selection, which stay blue. */
-  --color-accent: #d87832;
+     mode). Not used for navigation or dropdown selection, which stay cyan. */
+  --color-accent: #f0983c;
 
   /* Status tones — semantic only (never used decoratively), reserved for
-     actual device/connection/water-condition states. */
-  --color-good: #247451;
-  --color-info: #17658a;
-  --color-warn: #986200;
-  --color-bad: #b23b3b;
+     actual device/connection/water-condition states. Brightened relative to
+     the old light-theme values so they stay legible as text on a dark glass
+     surface rather than reading as muddy. */
+  --color-good: #34d399;
+  --color-info: #38bdf8;
+  --color-warn: #fbbf24;
+  --color-bad: #f87171;
 
-  --radius-card: 1rem;
-  --radius-inner: 0.75rem;
+  --radius-card: 1.375rem;
+  --radius-inner: 1rem;
 
-  /* Elevation. A hairline border does most of the "raised" work; the shadow
-     is only there to lift a card a little off the page, not to dramatize it. */
-  --shadow-card: 0 1px 2px rgb(20 45 61 / 0.05), 0 1px 1px rgb(20 45 61 / 0.04);
-  --shadow-pop: 0 12px 28px -8px rgb(20 45 61 / 0.16), 0 2px 6px rgb(20 45 61 / 0.08);
+  /* Elevation. Broad and soft rather than crisp, so a card reads as
+     floating just above the water scene instead of stamped onto it — a
+     thin border + faint inner top highlight (see `.surface-lift` below)
+     carries most of the "glass" definition, the shadow is just there to
+     separate it from the background. */
+  --shadow-card: 0 10px 30px -8px rgb(2 10 18 / 0.45), 0 2px 10px rgb(2 10 18 / 0.22);
+  --shadow-pop: 0 22px 50px -12px rgb(2 10 18 / 0.55), 0 4px 16px rgb(2 10 18 / 0.3);
 
   /* Motion. One calm "standard" curve everywhere — no spring/overshoot
      anywhere in the app, per the no-bouncy-motion direction. */
@@ -273,11 +293,32 @@
     text-transform: uppercase;
   }
 
-  /* Minimal elevation: a hairline border carries the shape, the shadow just
-     lifts a white card a little off the off-white page. No inner highlight
-     gradient — that trick only reads on a dark surface. */
+  /* Frosted glass: every card gets a background blur, a broad soft shadow,
+     and a faint inner highlight along the upper edge — the trio that
+     actually reads as "glass" rather than "a slightly transparent panel".
+     `position`/`overflow` are set here (not left to each call site) so the
+     highlight pseudo-element below is always clipped to the card's own
+     rounded corners regardless of which utility classes a given card also
+     carries. Blur + shadow are a distinct CSS property from the
+     `bg-*`/`border-*` utilities each card applies for its own tint, so
+     nothing here fights with those — this one class is what makes every
+     `surface-lift` card across the whole app glass, without editing each
+     screen. */
   .surface-lift {
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: blur(22px) saturate(150%);
+    -webkit-backdrop-filter: blur(22px) saturate(150%);
     box-shadow: var(--shadow-card);
+  }
+  .surface-lift::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    border-radius: inherit;
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.14), rgb(255 255 255 / 0) 36%);
   }
 
   /* Press affordance for tappable things that aren't a <Button>. Small and
@@ -291,6 +332,28 @@
   .press:active {
     transform: scale(0.98);
     opacity: 0.85;
+  }
+
+  /* The floating glass bottom nav: a stronger blur/tint than a regular card
+     since it sits directly over the busiest part of the water scene and
+     needs its icons to stay legible regardless of what's scrolling behind
+     it. Deliberately its own class rather than `surface-lift` — it floats
+     with margin on all sides instead of docking edge-to-edge. */
+  .glass-nav {
+    position: relative;
+    overflow: hidden;
+    background: rgb(10 30 46 / 0.55);
+    backdrop-filter: blur(28px) saturate(160%);
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    box-shadow: var(--shadow-pop);
+  }
+  .glass-nav::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.10), rgb(255 255 255 / 0) 40%);
   }
 
   /* Gentle entrance for a screen's top-level sections on navigation — brief

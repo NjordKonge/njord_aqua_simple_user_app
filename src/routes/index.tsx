@@ -5,6 +5,11 @@ import {
   HelpCircle,
   BluetoothSearching,
   AlertTriangle,
+  Droplet,
+  Thermometer as ThermometerIcon,
+  Shield,
+  Zap,
+  ChevronRight,
 } from "lucide-react";
 import { useDevices, useCommands, sendCommand } from "@/lib/device/store";
 import type { CommandEntry } from "@/lib/device/types";
@@ -21,12 +26,12 @@ import { playModeChangeFeedback, playConfirmFeedback, playAbortFeedback } from "
 import { BUILD_TAG } from "@/lib/buildInfo";
 import { Header } from "@/components/layout/Header";
 import { WaterStatusPanel } from "@/components/device/WaterStatusPanel";
-import { TankGraphic } from "@/components/device/TankGraphic";
+import { TankLevelRing } from "@/components/device/TankLevelRing";
 import { DeviceCard } from "@/components/device/DeviceCard";
 import { ElectrolysisStatusPanel } from "@/components/device/ElectrolysisStatusPanel";
 import { InfoSheet } from "@/components/ui/InfoSheet";
 import { Button } from "@/components/ui/Button";
-import { SpeedDial } from "@/components/ui/SpeedDial";
+import { GaugeArc } from "@/components/ui/GaugeArc";
 import { Thermometer } from "@/components/ui/Thermometer";
 import { EmptyState } from "@/components/ui/Skeleton";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
@@ -202,6 +207,7 @@ function HomeScreen() {
   return (
     <div className="stagger space-y-6">
       <Header
+        tagline="Cleaner water, brighter tomorrow"
         right={
           <button
             aria-label="Settings"
@@ -244,39 +250,34 @@ function HomeScreen() {
           match the height of their taller card, with each panel's own
           content centered in the space that leaves rather than stretched. */}
       <div className="grid grid-cols-2 gap-3">
-        {/* TANK STATUS — level, volume and the tank graphic. Dark-blue
-            backdrop, not the usual white card: the tank artwork itself is
-            designed to sit on a dark surface, so a white card made it
-            unreadable — "white on white". brand-deep gives it back the
-            contrast it needs, for both the render and the water fill. */}
-        <div className="surface-lift flex min-w-0 flex-col overflow-hidden rounded-card border border-white/10 bg-brand-deep">
-          <div className="px-4 pt-4">
-            <p className="type-heading text-on-fill">Tank status</p>
+        {/* TANK STATUS — a circular level ring instead of the old tank
+            illustration, per the glass facelift's "circular progress
+            indicator and a large percentage" spec. Still on a deep-blue
+            backdrop (now translucent, not solid) so the ring's track reads
+            clearly against it. */}
+        <div className="surface-lift flex min-w-0 flex-col overflow-hidden rounded-card border border-white/15 bg-brand-deep/45 p-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <Droplet size={14} className="shrink-0 text-brand" />
+              <p className="text-[0.8125rem] font-semibold leading-tight tracking-tight text-content">Tank status</p>
+            </div>
+            <ChevronRight size={16} className="shrink-0 text-faint" />
           </div>
 
-          <div className="aspect-square w-full px-4 pt-2">
-            <TankGraphic
-              percent={tank.percent}
-              liters={tank.liters}
-              capacityLiters={tank.capacityLiters}
-              low={tank.low}
+          <div className="flex flex-1 items-center justify-center py-3">
+            <TankLevelRing
+              percent={tank.hasReading ? (tank.percent ?? 0) : 0}
               hasReading={tank.hasReading}
-              electrolysisOn={electrolysisOn}
-              showCaption={false}
+              low={tank.low}
+              size={104}
             />
           </div>
 
-          {/* Level / volume / water used as a typographic strip rather than one
+          {/* Volume + 24h usage as a typographic strip rather than one
               run-on caption: the figure carries the weight, the word beneath
               it stays small and quiet, so the numbers are scannable at a
               glance and the labels never compete with them. */}
-          <div className="mt-3 grid grid-cols-3 divide-x divide-white/10 border-t border-white/10">
-            <TankStat
-              value={tank.hasReading ? tank.percent : null}
-              unit="%"
-              label="Level"
-              emphasis={tank.low ? "warn" : "normal"}
-            />
+          <div className="grid grid-cols-2 divide-x divide-white/10 border-t border-white/10 pt-1">
             <TankStat
               value={tank.hasReading ? tank.liters : null}
               unit="L"
@@ -293,37 +294,50 @@ function HomeScreen() {
 
         {/* TEMPERATURE — its own panel now rather than sharing one with
             power, so the thermometer gets a whole column to itself instead
-            of being squeezed down to fit alongside a second gauge. */}
-        <div className="surface-lift flex min-w-0 flex-col overflow-hidden rounded-card border border-white/10 bg-water">
-          <div className="px-4 pt-4">
-            <p className="type-heading text-on-fill">Temperature</p>
+            of being squeezed down to fit alongside a second gauge. Tinted
+            electric cyan (the app's one interactive/accent colour) rather
+            than plain white, per spec. */}
+        <div className="surface-lift flex min-w-0 flex-col overflow-hidden rounded-card border border-white/15 bg-water/40 p-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <ThermometerIcon size={14} className="shrink-0 text-brand" />
+              <p className="text-[0.8125rem] font-semibold leading-tight tracking-tight text-content">Temperature</p>
+            </div>
+            <ChevronRight size={16} className="shrink-0 text-faint" />
           </div>
-          <div className="flex flex-1 items-center justify-center px-4 py-4">
+          <div className="flex flex-1 items-center justify-center px-1 py-2">
             <Thermometer
               value={health?.temperature.available ? health.temperature.celsius : null}
               max={gaugeRanges.tempMaxC}
               unit="°C"
               label="Water temp"
-              size={132}
+              size={124}
+              color="var(--color-brand)"
+              trackColor="rgb(255 255 255 / 0.14)"
+              textClassName="text-content"
+              subTextClassName="text-faint"
             />
           </div>
         </div>
 
         {/* DISINFECTION CONTROL — the control that drives the process: set
             it here, see its effect over in Live electrolysis status. */}
-        <div className="surface-lift flex min-w-0 flex-col overflow-hidden rounded-card border border-white/10 bg-water">
-          <div className="flex items-center justify-between gap-3 px-4 pt-4">
-            <p className="type-heading text-on-fill">Disinfection control</p>
+        <div className="surface-lift flex min-w-0 flex-col overflow-hidden rounded-card border border-white/15 bg-water/40 p-4">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex min-w-0 items-start gap-1.5">
+              <Shield size={14} className="mt-0.5 shrink-0 text-brand" />
+              <p className="text-[0.75rem] font-semibold leading-tight tracking-tight text-content">Disinfection control</p>
+            </div>
             <button
               aria-label="More information"
               onClick={() => setModeInfoOpen(true)}
-              className="press rounded-full p-1 text-on-fill/70"
+              className="press shrink-0 rounded-full p-1 text-faint"
             >
-              <HelpCircle size={18} />
+              <HelpCircle size={16} />
             </button>
           </div>
-          <div className="flex flex-1 flex-col justify-center px-4 pb-4 pt-3">
-            <p className="mb-1.5 type-cap text-on-fill/55">Treatment setting</p>
+          <div className="flex flex-1 flex-col justify-center pt-3">
+            <p className="mb-1.5 type-cap text-faint">Treatment setting</p>
             <DosingModeToggle
               mode={displayedMode}
               onChange={(mode) => {
@@ -343,27 +357,27 @@ function HomeScreen() {
         </div>
 
         {/* LIVE ELECTROLYSIS STATUS — everything about the process while
-            it's actually running: the power it's drawing, and the
-            plain-language status the badge carries. No electrode
-            illustration — the words are what carry the meaning, so they
-            get the size; the bubbles behind them are ambient texture for
-            "current is flowing" and nothing more. */}
-        <div className="surface-lift flex min-w-0 flex-col overflow-hidden rounded-card border border-white/10 bg-water">
-          <div className="px-4 pt-4">
-            <p className="type-heading text-on-fill">Live electrolysis status</p>
+            it's actually running: a clean semi-circular gauge of the
+            cycle's power draw (shown as a percentage of the configured
+            max, per spec) and the plain-language status the badge carries. */}
+        <div className="surface-lift flex min-w-0 flex-col overflow-hidden rounded-card border border-white/15 bg-water/40 p-4">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex min-w-0 items-start gap-1.5">
+              <Zap size={14} className="mt-0.5 shrink-0 text-brand" />
+              <p className="text-[0.75rem] font-semibold leading-tight tracking-tight text-content">Live electrolysis status</p>
+            </div>
+            <ChevronRight size={16} className="mt-0.5 shrink-0 text-faint" />
           </div>
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-4">
-            <SpeedDial
-              value={watts}
-              max={gaugeRanges.wattsMax}
-              unit="W"
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 pt-2">
+            <GaugeArc
+              percent={watts != null && gaugeRanges.wattsMax > 0 ? (watts / gaugeRanges.wattsMax) * 100 : 0}
+              hasReading={watts != null}
               label="Power"
-              size={132}
+              size={112}
               // "waiting" = this cycle's charge target is already reached and
               // the electrode is holding for the next cycle — a normal part of
-              // the dosing workflow, not a fault, but a flat "0 W" reads as
-              // broken/stuck. Say so explicitly instead. (watts is 0 for every
-              // other non-"on" state, so this is purely a label choice.)
+              // the dosing workflow, not a fault, but a flat "0%" reads as
+              // broken/stuck. Say so explicitly instead.
               placeholder={electrolysisState === "waiting" ? "Waiting\u2026" : undefined}
             />
             <ElectrolysisStatusPanel
@@ -546,9 +560,9 @@ function DosingModeToggle({
     // colour) rather than three independently-toggling backgrounds — the
     // travel is what makes a mode change feel like moving a physical switch,
     // and it also visually connects the mode you left to the one you chose.
-    // Sits on the blue live-water panel, so the trough is a translucent
-    // white rather than the light-surface tokens used elsewhere.
-    <div className="relative grid grid-cols-3 gap-2 rounded-card border border-white/10 bg-black/15 p-1">
+    // Sits on a translucent-glass panel, so the trough is a soft dark film
+    // rather than the light-surface tokens used elsewhere.
+    <div className="relative grid grid-cols-3 gap-2 rounded-card border border-white/10 bg-black/20 p-1">
       <span
         aria-hidden
         className="absolute inset-y-1 left-1 rounded-[calc(var(--radius-card)-0.25rem)] transition-all duration-200 ease-[var(--ease-standard)]"
@@ -556,6 +570,12 @@ function DosingModeToggle({
           width: `calc((100% - 0.5rem) / 3)`,
           transform: `translateX(${activeIndex * 100}%)`,
           backgroundColor: thumb,
+          // A thin edge glow in the thumb's own colour — "active selections
+          // gain a stronger surface and a thin edge glow" per spec, kept in
+          // each mode's own semantic colour (red/green/accent) rather than a
+          // generic cyan, since that colour is what actually carries the
+          // off/normal/high meaning and shouldn't be flattened away.
+          boxShadow: `0 0 0 1px color-mix(in srgb, ${thumb} 70%, transparent), 0 0 14px color-mix(in srgb, ${thumb} 55%, transparent)`,
         }}
       />
       {options.map((opt) => (

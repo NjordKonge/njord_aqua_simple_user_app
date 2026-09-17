@@ -1,5 +1,6 @@
 /**
- * Screen header: Njord Aqua wordmark top-left, optional action icon top-right.
+ * Screen header: Njord Aqua wordmark top-left, optional small-caps tagline
+ * beneath it, optional action icon top-right.
  *
  * Plain text (not the logo image asset) — the image rendered poorly at this
  * size, and the app already sets Roboto as the global font, so a text
@@ -7,12 +8,17 @@
  */
 import type { ReactNode } from "react";
 
-export function Header({ right }: { right?: ReactNode }) {
+export function Header({ right, tagline }: { right?: ReactNode; tagline?: string }) {
   return (
     <div className="mb-6 flex items-center justify-between">
-      <span className="text-[1.0625rem] font-medium tracking-tight text-content">
-        Njord Aqua
-      </span>
+      <div className="min-w-0">
+        <span className="block text-[1.375rem] font-bold tracking-tight text-content">
+          Njord Aqua
+        </span>
+        {tagline ? (
+          <span className="type-cap mt-0.5 block text-faint">{tagline}</span>
+        ) : null}
+      </div>
       {right}
     </div>
   );
