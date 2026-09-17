@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   Settings as SettingsIcon,
   HelpCircle,
-  Gauge as GaugeIcon,
   BluetoothSearching,
   AlertTriangle,
 } from "lucide-react";
@@ -237,144 +236,146 @@ function HomeScreen() {
         onInfo={() => setInfoOpen(true)}
       />
 
-      {/* WATER CONTROL — the primary panel. Everything that is true *right
-          now* lives here: the control that drives the process, the two live
-          readings, and the process itself. A lighter blue than the tank card
-          below so the two blue surfaces read as separate cards rather than
-          one long slab. */}
-      <section className="surface-lift overflow-hidden rounded-card border border-white/10 bg-water">
-        <div className="flex items-center justify-between gap-3 px-4 pt-4">
-          <p className="type-heading text-on-fill">Water control</p>
-          <button
-            aria-label="More information"
-            onClick={() => setModeInfoOpen(true)}
-            className="press rounded-full p-1 text-on-fill/70"
-          >
-            <HelpCircle size={18} />
-          </button>
+      {/* Home's four "what's happening right now" panels, as a 2x2 grid:
+          tank state, temperature, the control that drives treatment, and
+          the live status that control produces. Four equal-width cards
+          rather than one or two long ones, so all four are visible together
+          with minimal scrolling. Grid (not flex) so both rows independently
+          match the height of their taller card, with each panel's own
+          content centered in the space that leaves rather than stretched. */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* TANK STATUS — level, volume and the tank graphic. Dark-blue
+            backdrop, not the usual white card: the tank artwork itself is
+            designed to sit on a dark surface, so a white card made it
+            unreadable — "white on white". brand-deep gives it back the
+            contrast it needs, for both the render and the water fill. */}
+        <div className="surface-lift flex min-w-0 flex-col overflow-hidden rounded-card border border-white/10 bg-brand-deep">
+          <div className="px-4 pt-4">
+            <p className="type-heading text-on-fill">Tank status</p>
+          </div>
+
+          <div className="aspect-square w-full px-4 pt-2">
+            <TankGraphic
+              percent={tank.percent}
+              liters={tank.liters}
+              capacityLiters={tank.capacityLiters}
+              low={tank.low}
+              hasReading={tank.hasReading}
+              electrolysisOn={electrolysisOn}
+              showCaption={false}
+            />
+          </div>
+
+          {/* Level / volume / water used as a typographic strip rather than one
+              run-on caption: the figure carries the weight, the word beneath
+              it stays small and quiet, so the numbers are scannable at a
+              glance and the labels never compete with them. */}
+          <div className="mt-3 grid grid-cols-3 divide-x divide-white/10 border-t border-white/10">
+            <TankStat
+              value={tank.hasReading ? tank.percent : null}
+              unit="%"
+              label="Level"
+              emphasis={tank.low ? "warn" : "normal"}
+            />
+            <TankStat
+              value={tank.hasReading ? tank.liters : null}
+              unit="L"
+              label={`of ${tank.capacityLiters}L`}
+              emphasis={tank.low ? "warn" : "normal"}
+            />
+            {/* Water used — the firmware has no flow sensor, so this is a
+                rough figure reconstructed from the logged tank level (sum of
+                drops over the last 24h; a rise is a refill, not usage — see
+                lib/device/tankLog.ts). Blank until enough samples exist. */}
+            <TankStat value={tankUsage.usedLiters} unit="L" label="Used" emphasis="quiet" />
+          </div>
         </div>
 
-        {/* The mode control sits at the top of the panel, directly above the
-            readings it drives — set it here, see the result immediately
-            below, rather than in a separate card elsewhere on the screen. */}
-        <div className="px-4 pt-3">
-          <p className="mb-1.5 type-cap text-on-fill/55">Treatment setting</p>
-          <DosingModeToggle
-            mode={displayedMode}
-            onChange={(mode) => {
-              setPendingMode(mode);
-              playModeChangeFeedback(mode);
-              // setDosingMode is async (STOP is awaited before SETCFG/START are
-              // sent, in series). onEntry reports each step's command entry as
-              // it's sent, so the ref always reflects the currently in-flight
-              // (or just-failed) command instead of only the last one.
-              pendingEntryRef.current = null;
-              void setDosingMode(device.id, mode, cycleSeconds, targetMa, (entry) => {
-                pendingEntryRef.current = entry;
-              });
-            }}
-          />
+        {/* TEMPERATURE — its own panel now rather than sharing one with
+            power, so the thermometer gets a whole column to itself instead
+            of being squeezed down to fit alongside a second gauge. */}
+        <div className="surface-lift flex min-w-0 flex-col overflow-hidden rounded-card border border-white/10 bg-water">
+          <div className="px-4 pt-4">
+            <p className="type-heading text-on-fill">Temperature</p>
+          </div>
+          <div className="flex flex-1 items-center justify-center px-4 py-4">
+            <Thermometer
+              value={health?.temperature.available ? health.temperature.celsius : null}
+              max={gaugeRanges.tempMaxC}
+              unit="°C"
+              label="Water temp"
+              size={132}
+            />
+          </div>
         </div>
 
-        {/* Temperature gets a thermometer and power gets a dial: both are
-            bounded magnitudes with a meaningful full scale, but temperature
-            has a physical instrument people read instantly, whereas power
-            only has the abstract low/normal/high of a needle. Their ranges
-            are installation-specific, so they're set in Settings. */}
-        <div className="mt-4 flex items-start justify-center gap-6 px-4">
-          <Thermometer
-            value={health?.temperature.available ? health.temperature.celsius : null}
-            max={gaugeRanges.tempMaxC}
-            unit="°C"
-            label="Water temp"
-            size={128}
-          />
-          <SpeedDial
-            value={watts}
-            max={gaugeRanges.wattsMax}
-            unit="W"
-            label="Power"
-            size={128}
-            // "waiting" = this cycle's charge target is already reached and
-            // the electrode is holding for the next cycle — a normal part of
-            // the dosing workflow, not a fault, but a flat "0 W" reads as
-            // broken/stuck. Say so explicitly instead. (watts is 0 for every
-            // other non-"on" state, so this is purely a label choice.)
-            placeholder={electrolysisState === "waiting" ? "Waiting\u2026" : undefined}
-          />
+        {/* DISINFECTION CONTROL — the control that drives the process: set
+            it here, see its effect over in Live electrolysis status. */}
+        <div className="surface-lift flex min-w-0 flex-col overflow-hidden rounded-card border border-white/10 bg-water">
+          <div className="flex items-center justify-between gap-3 px-4 pt-4">
+            <p className="type-heading text-on-fill">Disinfection control</p>
+            <button
+              aria-label="More information"
+              onClick={() => setModeInfoOpen(true)}
+              className="press rounded-full p-1 text-on-fill/70"
+            >
+              <HelpCircle size={18} />
+            </button>
+          </div>
+          <div className="flex flex-1 flex-col justify-center px-4 pb-4 pt-3">
+            <p className="mb-1.5 type-cap text-on-fill/55">Treatment setting</p>
+            <DosingModeToggle
+              mode={displayedMode}
+              onChange={(mode) => {
+                setPendingMode(mode);
+                playModeChangeFeedback(mode);
+                // setDosingMode is async (STOP is awaited before SETCFG/START are
+                // sent, in series). onEntry reports each step's command entry as
+                // it's sent, so the ref always reflects the currently in-flight
+                // (or just-failed) command instead of only the last one.
+                pendingEntryRef.current = null;
+                void setDosingMode(device.id, mode, cycleSeconds, targetMa, (entry) => {
+                  pendingEntryRef.current = entry;
+                });
+              }}
+            />
+          </div>
         </div>
 
-        <div className="mt-4 px-4">
-          {/* Status only — no electrode illustration. The words are what
-              carry the meaning, so they get the size; the bubbles behind
-              them are ambient texture for "current is flowing" and nothing
-              more. */}
-          <ElectrolysisStatusPanel
-            tone={electrolysisBadge.tone}
-            label={electrolysisBadge.label}
-            active={electrolysisOn && device.online}
-          />
-        </div>
-
-        <div className="h-4" />
-      </section>
-
-      {/* Tank gets its own full-width card with a generous fixed height —
-          sharing a row with the 3 metric cards capped it to ~60% of the
-          screen width and whatever height the metrics stack happened to be,
-          which was never "large". A dedicated section lets it be as big as
-          the screen reasonably allows. */}
-      {/* Dark-blue backdrop, not the usual white card: the tank artwork
-          itself is white line-art on a transparent PNG (designed to sit on
-          a dark surface), so a white card made it unreadable — "white on
-          white". brand-deep gives it back the contrast it needs, for both
-          the outline and the water fill. */}
-      <div className="surface-lift overflow-hidden rounded-card border border-white/10 bg-brand-deep">
-        <div className="flex items-center justify-between gap-3 px-4 pt-4">
-          <p className="truncate type-heading text-on-fill">{name}</p>
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 type-label text-on-fill/85">
-            <GaugeIcon size={12} strokeWidth={2.2} />
-            Tank level
-          </span>
-        </div>
-
-        <div className="h-64 w-full px-4 pt-2">
-          <TankGraphic
-            percent={tank.percent}
-            liters={tank.liters}
-            capacityLiters={tank.capacityLiters}
-            low={tank.low}
-            hasReading={tank.hasReading}
-            electrolysisOn={electrolysisOn}
-            showCaption={false}
-          />
-        </div>
-
-        {/* Level / volume / water used as a typographic strip rather than one
-            run-on caption: the figure carries the weight, the word beneath
-            it stays small and quiet, so the numbers are scannable at a
-            glance and the labels never compete with them. */}
-        <div className="mt-3 grid grid-cols-3 divide-x divide-white/10 border-t border-white/10">
-          <TankStat
-            value={tank.hasReading ? tank.percent : null}
-            unit="%"
-            label="Level"
-            emphasis={tank.low ? "warn" : "normal"}
-          />
-          <TankStat
-            value={tank.hasReading ? tank.liters : null}
-            unit="L"
-            label={`of ${tank.capacityLiters}L`}
-            emphasis={tank.low ? "warn" : "normal"}
-          />
-          {/* Water used — the firmware has no flow sensor, so this is a
-              rough figure reconstructed from the logged tank level (sum of
-              drops over the last 24h; a rise is a refill, not usage — see
-              lib/device/tankLog.ts). Blank until enough samples exist. */}
-          <TankStat value={tankUsage.usedLiters} unit="L" label="Used (24h)" emphasis="quiet" />
+        {/* LIVE ELECTROLYSIS STATUS — everything about the process while
+            it's actually running: the power it's drawing, and the
+            plain-language status the badge carries. No electrode
+            illustration — the words are what carry the meaning, so they
+            get the size; the bubbles behind them are ambient texture for
+            "current is flowing" and nothing more. */}
+        <div className="surface-lift flex min-w-0 flex-col overflow-hidden rounded-card border border-white/10 bg-water">
+          <div className="px-4 pt-4">
+            <p className="type-heading text-on-fill">Live electrolysis status</p>
+          </div>
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-4">
+            <SpeedDial
+              value={watts}
+              max={gaugeRanges.wattsMax}
+              unit="W"
+              label="Power"
+              size={132}
+              // "waiting" = this cycle's charge target is already reached and
+              // the electrode is holding for the next cycle — a normal part of
+              // the dosing workflow, not a fault, but a flat "0 W" reads as
+              // broken/stuck. Say so explicitly instead. (watts is 0 for every
+              // other non-"on" state, so this is purely a label choice.)
+              placeholder={electrolysisState === "waiting" ? "Waiting\u2026" : undefined}
+            />
+            <ElectrolysisStatusPanel
+              tone={electrolysisBadge.tone}
+              label={electrolysisBadge.label}
+              active={electrolysisOn && device.online}
+              showCaption={false}
+              className="w-full"
+            />
+          </div>
         </div>
       </div>
-
 
       {attention.length > 0 ? (
         <div className="surface-lift relative overflow-hidden rounded-card border border-border-soft bg-surface py-4 pl-[1.125rem] pr-4">
@@ -484,7 +485,7 @@ function TankStat({
   emphasis: "normal" | "warn" | "quiet";
 }) {
   return (
-    <div className="flex flex-col items-center px-2 py-3">
+    <div className="flex min-w-0 flex-col items-center px-1 py-3">
       {value === null ? (
         <span className="type-value text-on-fill/40">—</span>
       ) : (
@@ -493,16 +494,16 @@ function TankStat({
           decimals={0}
           unit={unit}
           className={cn(
-            "type-value",
+            "text-lg font-semibold leading-tight tabular-nums",
             emphasis === "warn" ? "text-warn" : emphasis === "quiet" ? "text-on-fill/55" : "text-on-fill",
           )}
           unitClassName={cn(
-            "ml-0.5 type-unit",
+            "ml-0.5 text-[11px] font-medium",
             emphasis === "warn" ? "text-warn/80" : "text-on-fill/50",
           )}
         />
       )}
-      <p className="mt-0.5 type-cap text-on-fill/50">{label}</p>
+      <p className="mt-0.5 truncate type-cap text-on-fill/50">{label}</p>
     </div>
   );
 }
@@ -562,7 +563,7 @@ function DosingModeToggle({
           key={opt.value}
           onClick={() => onChange(opt.value)}
           className={cn(
-            "relative rounded-card px-3 py-3 text-sm font-medium transition-colors duration-150",
+            "relative rounded-card px-1 py-3 text-xs font-medium transition-colors duration-150",
             "active:scale-[0.98] transition-transform",
             opt.value === mode ? SELECTED_TEXT[opt.value] : "text-on-fill/65",
           )}

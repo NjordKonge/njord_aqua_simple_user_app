@@ -48,12 +48,16 @@ export function ElectrolysisStatusPanel({
   label,
   active,
   className,
+  showCaption = true,
 }: {
   tone: Tone;
   label: string;
   /** Current is actually flowing — the only state that gets bubbles. */
   active: boolean;
   className?: string;
+  /** Off when a surrounding card title already says "Live electrolysis
+   * status", so the two don't repeat the same words back to back. */
+  showCaption?: boolean;
 }) {
   const reduced = useReducedMotion();
 
@@ -109,8 +113,10 @@ export function ElectrolysisStatusPanel({
         </div>
       ) : null}
 
-      <p className="relative type-cap text-on-fill/55">Live electrolysis status</p>
-      <div className="relative mt-1.5 flex items-center gap-2.5">
+      {showCaption ? (
+        <p className="relative type-cap text-on-fill/55">Live electrolysis status</p>
+      ) : null}
+      <div className={cn("relative flex items-center gap-2.5", showCaption && "mt-1.5")}>
         <span
           className={cn(
             "h-2.5 w-2.5 shrink-0 rounded-full",
